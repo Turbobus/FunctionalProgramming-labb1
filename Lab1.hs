@@ -16,7 +16,7 @@ power n k  = n * power n (k-1)
 -- power n k takes to compute
 
 stepsPower :: Integer -> Integer -> Integer
-stepsPower n k = k + 2 
+stepsPower n k = k + 1 
 
 
 -- B -------------------------
@@ -32,8 +32,8 @@ power1 n k  = product nList
 
 power2 :: Integer -> Integer -> Integer
 power2 n k | k == 0    =  1
-           | odd k     =  n * (n^(k - 1))
-           | otherwise =  (n * n)^(div k 2)
+           | odd k     =  n * power2 n (k - 1)
+           | otherwise =  power2 (n*n) (div k 2)
 
 
 
@@ -44,6 +44,8 @@ power2 n k | k == 0    =  1
  2 0 : This will test so we get the same result when k is 0, the results 
        should be 1 for every function
  0 5 : This will test so that the answer is 0
+ -2 3: This will test negative values for n
+ 5 1000: This will test big numbers
  -}
 
 -- 
@@ -56,11 +58,12 @@ powerTest = prop_powers 2 3
             && prop_powers 2 4 
             && prop_powers 2 0 
             && prop_powers 0 5
+            && prop_powers (-2) 3
+            && prop_powers 5 1000
 
 --
 prop_powers' :: Integer -> Integer -> Bool
-prop_powers' n k = (power n a == power1 n a) && (power1 n a == power2 n a)
-              where a = abs(k) 
+prop_powers' n k = prop_powers n (abs k)
 {-
  Used "abs" because negative k crasched tests. The lab assignment said that the
  powerfuction only should be able to take positive k numbers
