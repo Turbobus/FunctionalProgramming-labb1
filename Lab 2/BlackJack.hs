@@ -3,19 +3,12 @@ import Cards
 import RunGame
 import Test.QuickCheck
 
-hand2 = Add (Card (Numeric 9) Hearts)
-            (Add (Card Ace Spades)
-            (Add (Card (Numeric 9) Spades) Empty))
+hand2 :: Hand
+hand2 = Add (Card (Numeric 2) Hearts)
+            (Add (Card Jack Spades) Empty)
             
-hand3 = Add (Card (Numeric 10) Hearts)
-            (Add (Card Ace Spades)
-            (Add (Card (Numeric 10) Spades) 
-            (Add (Card Ace Spades) Empty)))
-        
 
-david = Add (Card Ace Hearts)
-            (Add (Card Ace Spades) Empty)
-
+-- A0
 {-
 size hand2
   = size (Add (Card (Numeric 2) Hearts)
@@ -38,14 +31,22 @@ sizeSteps = [ size hand2
             , 2]
 
 
+
+-- A1
+
 -- Display the rank and suit of the card
 displayCard :: Card -> String
-displayCard card = show (rank card) ++ " of " ++ show (suit card) ++ " \n"
+displayCard (Card (Numeric i) s ) = show i ++ " of " ++ show s ++ " \n" 
+displayCard (Card r s ) = show r ++ " of " ++ show s ++ " \n"
 
 -- Display all the cards in the hand
 display :: Hand -> String
 display Empty           = "\n"
 display (Add card hand) = displayCard card ++ display hand
+
+
+
+-- A2
 
 -- Returns the value of the hand
 value :: Hand -> Integer
@@ -67,11 +68,19 @@ calculateHandValue (Add card hand) i
     | rank card == Ace = i + calculateHandValue hand i
     | otherwise        = valueRank (rank card) + calculateHandValue hand i
 
+
+
+-- A3
+
 -- Checks if player is bust, which means it's game over
 gameOver :: Hand -> Bool
 gameOver hand | points > 21 = True
               | otherwise   = False
   where points = value hand
+
+
+
+-- A4
 
 -- Returns the winner of the Game
 winner :: Hand -> Hand -> Player
@@ -91,4 +100,5 @@ prop_gameOver :: Hand -> Bool
 prop_gameOver hand = gameOver hand || not (gameOver hand)
 
 prop_winner :: Hand -> Hand -> Bool
-prop_winner guestHand bankHand = winner guestHand bankHand == Bank || winner guestHand bankHand == Guest
+prop_winner guestHand bankHand = 
+  winner guestHand bankHand == Bank || winner guestHand bankHand == Guest
