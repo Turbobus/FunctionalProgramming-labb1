@@ -149,6 +149,7 @@ shuffleDeck g deck
 
 -- Get the Card of given index from deck
 getNthCard :: Int -> Hand -> Card
+getNthCard _ Empty                       = error "No deck to get card from"
 getNthCard i (Add card deck) | i > 0     = getNthCard (i-1) deck
                              | otherwise = card
 
@@ -163,6 +164,7 @@ removeCardFromDeck  card (Add card2 deck)
 -- B6
 
 -- Our implementation for the different functions
+implementation :: Interface
 implementation = Interface
   { iFullDeck = fullDeck
   , iValue    = value
