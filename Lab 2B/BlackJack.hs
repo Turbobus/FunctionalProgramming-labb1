@@ -138,6 +138,27 @@ playBankHelper deck bankHand
 
 
 -- B5
+
+
+-- Shuffels a given deck of cards
+shuffleDeck :: StdGen -> Hand -> Hand
+shuffleDeck _ Empty               = Empty
+shuffleDeck g deck | deckSize > 0 = Add card (shuffleDeck g' restOfDeck)
+   where (card, restOfDeck)       = moveCardFromDeck rand deck
+         (rand, g')               = randomR (0, deckSize-1) g
+         deckSize                 = size deck
+
+-- Removes a Card from a given Hand and returns both 
+moveCardFromDeck :: Int -> Hand -> (Card, Hand)
+moveCardFromDeck _ Empty          = error "Can't get card from empty deck"
+moveCardFromDeck i (Add card smallDeck) 
+                 | i == 0         = (card, smallDeck) 
+                 | otherwise      = (foundCard, Add card restOfDeck)
+    where (foundCard, restOfDeck) = moveCardFromDeck (i-1) smallDeck   
+
+
+
+{-
 -- Shuffels a given deck of cards
 shuffleDeck :: StdGen -> Hand -> Hand
 shuffleDeck _ Empty = Empty
@@ -160,6 +181,7 @@ removeCardFromDeck  card (Add card2 deck)
                | card == card2 = deck
                | otherwise     = Add card2 (removeCardFromDeck card deck)
 
+-}
 
 -- B6
 
