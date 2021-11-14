@@ -139,7 +139,6 @@ playBankHelper deck bankHand
 
 -- B5
 
-
 -- Shuffels a given deck of cards
 shuffleDeck :: StdGen -> Hand -> Hand
 shuffleDeck _ Empty               = Empty
@@ -155,7 +154,6 @@ moveCardFromDeck i (Add card smallDeck)
                  | i == 0         = (card, smallDeck) 
                  | otherwise      = (foundCard, Add card restOfDeck)
     where (foundCard, restOfDeck) = moveCardFromDeck (i-1) smallDeck   
-
 
 
 {-
