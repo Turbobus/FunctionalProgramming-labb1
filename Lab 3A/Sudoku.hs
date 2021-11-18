@@ -32,25 +32,59 @@ example =
     n = Nothing
     j = Just
 
+
 -- * A1
 
 -- | allBlankSudoku is a sudoku with just blanks
 allBlankSudoku :: Sudoku
-allBlankSudoku = undefined
+allBlankSudoku = Sudoku (replicate 9 row)
+  where row = replicate 9 Nothing 
 
 -- * A2
 
 -- | isSudoku sud checks if sud is really a valid representation of a sudoku
 -- puzzle
 isSudoku :: Sudoku -> Bool
-isSudoku = undefined
+isSudoku (Sudoku [])         = False
+isSudoku (Sudoku (row:rows)) = checkValidNumbers (row:rows) && checkSize (Sudoku (row:rows))
+
+-- Checks if a list of rows contains valid numbers
+-- TODO make sure it doesn't just check the first cell in a row ------------------------------------------------------
+checkValidNumbers :: [Row] -> Bool
+checkValidNumbers []         = True
+checkValidNumbers (row:rows) = all validNumber row && checkValidNumbers rows
+
+-- Checks if a Cell contains a valid number, 
+-- helper function for checkValidNumber 
+validNumber :: Cell -> Bool
+validNumber cell = cell `elem` validCells 
+    where validCells = Nothing : [Just n | n <- [1..9]] 
+
+-- Check if whole Sudoku board is a 9x9 board
+checkSize :: Sudoku -> Bool
+checkSize (Sudoku (row:rows)) | length (row:rows) /= 9 = False
+                              | otherwise              = checkRowSize (row:rows)
+                       
+-- Checks to see if all row sizes are equal to 9,
+-- helper function for checkSize
+checkRowSize :: [Row] -> Bool
+checkRowSize []         = True
+checkRowSize (row:rows) = length row == 9 && checkRowSize rows 
+
 
 -- * A3
 
 -- | isFilled sud checks if sud is completely filled in,
 -- i.e. there are no blanks
 isFilled :: Sudoku -> Bool
-isFilled = undefined
+isFilled (Sudoku (row:rows)) = all checkIfCellIsFilled row
+                               && isFilled (Sudoku rows)
+
+-- Helper functions for isFilled, checks if a cell is filled----------------------------------------Slå ihop med ovan 
+checkIfCellIsFilled :: Cell -> Bool
+checkIfCellIsFilled cell = cell `elem` validCells 
+    where validCells = [Just n | n <- [1..9]] 
+
 
 ------------------------------------------------------------------------------
 
@@ -59,7 +93,20 @@ isFilled = undefined
 -- | printSudoku sud prints a nice representation of the sudoku sud on
 -- the screen
 printSudoku :: Sudoku -> IO ()
-printSudoku = undefined
+printSudoku (Sudoku (row:rows)) = putStrLn (buildRows (row:rows)) 
+
+
+-- Convert each row into a string
+buildRows :: [Row] -> String
+buildRows []         = ""
+buildRows (row:rows) = rowString ++ "\n" ++ (buildRows rows)
+     where rowString = unwords [cellToString cells | cells <- row]          
+
+-- Converts the cell to a String representing that value
+cellToString :: Cell -> String
+cellToString Nothing   = "."  
+cellToString (Just a)  = show a 
+
 
 -- * B2
 
