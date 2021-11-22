@@ -133,7 +133,7 @@ playBankHelper :: Hand -> Hand -> Hand
 playBankHelper deck bankHand 
       | value bankHand < 16 = playBankHelper smallerDeck biggerHand
       | otherwise = bankHand
-  where (smallerDeck , biggerHand) = draw deck bankHand  
+  where (smallerDeck , biggerHand) = draw deck bankHand
 
 
 
