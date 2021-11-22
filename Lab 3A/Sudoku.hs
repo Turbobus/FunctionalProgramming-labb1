@@ -1,6 +1,8 @@
 module Sudoku where
 
 import Test.QuickCheck
+import Data.Char(digitToInt)
+import Data.List
 
 ------------------------------------------------------------------------------
 
@@ -8,7 +10,7 @@ import Test.QuickCheck
 type Cell = Maybe Int -- a single cell
 type Row  = [Cell]    -- a row is a list of cells
 
-data Sudoku = Sudoku [Row] 
+data Sudoku = Sudoku [Row]
  deriving ( Show, Eq )
 
 rows :: Sudoku -> [Row]
@@ -38,7 +40,7 @@ example =
 -- | allBlankSudoku is a sudoku with just blanks
 allBlankSudoku :: Sudoku
 allBlankSudoku = Sudoku (replicate 9 row)
-  where row = replicate 9 Nothing 
+  where row = replicate 9 Nothing
 
 -- * A2
 
@@ -51,25 +53,23 @@ isSudoku (Sudoku (row:rows)) = checkValidNumbers (row:rows) && checkSize (Sudoku
 -- Checks if a list of rows contains valid numbers
 -- TODO make sure it doesn't just check the first cell in a row ------------------------------------------------------
 checkValidNumbers :: [Row] -> Bool
-checkValidNumbers []         = True
-checkValidNumbers (row:rows) = all validNumber row && checkValidNumbers rows
+checkValidNumbers = foldr ((&&) . all validNumber) True
 
 -- Checks if a Cell contains a valid number, 
 -- helper function for checkValidNumber 
 validNumber :: Cell -> Bool
-validNumber cell = cell `elem` validCells 
-    where validCells = Nothing : [Just n | n <- [1..9]] 
+validNumber cell = (cell == Nothing) || checkIfCellIsFilled cell
 
 -- Check if whole Sudoku board is a 9x9 board
 checkSize :: Sudoku -> Bool
 checkSize (Sudoku (row:rows)) | length (row:rows) /= 9 = False
                               | otherwise              = checkRowSize (row:rows)
-                       
+
 -- Checks to see if all row sizes are equal to 9,
 -- helper function for checkSize
 checkRowSize :: [Row] -> Bool
 checkRowSize []         = True
-checkRowSize (row:rows) = length row == 9 && checkRowSize rows 
+checkRowSize (row:rows) = length row == 9 && checkRowSize rows
 
 
 -- * A3
@@ -82,8 +82,8 @@ isFilled (Sudoku (row:rows)) = all checkIfCellIsFilled row
 
 -- Helper functions for isFilled, checks if a cell is filled----------------------------------------Slå ihop med ovan 
 checkIfCellIsFilled :: Cell -> Bool
-checkIfCellIsFilled cell = cell `elem` validCells 
-    where validCells = [Just n | n <- [1..9]] 
+checkIfCellIsFilled cell = cell `elem` validCells
+    where validCells = [Just n | n <- [1..9]]
 
 
 ------------------------------------------------------------------------------
@@ -93,27 +93,51 @@ checkIfCellIsFilled cell = cell `elem` validCells
 -- | printSudoku sud prints a nice representation of the sudoku sud on
 -- the screen
 printSudoku :: Sudoku -> IO ()
-printSudoku (Sudoku (row:rows)) = putStrLn (buildRows (row:rows)) 
-
+printSudoku (Sudoku (row:rows)) = putStrLn (buildRows (row:rows))
 
 -- Convert each row into a string
 buildRows :: [Row] -> String
 buildRows []         = ""
 buildRows (row:rows) = rowString ++ "\n" ++ (buildRows rows)
-     where rowString = unwords [cellToString cells | cells <- row]          
+     where rowString = unwords [cellToString cells | cells <- row]
 
 -- Converts the cell to a String representing that value
 cellToString :: Cell -> String
-cellToString Nothing   = "."  
-cellToString (Just a)  = show a 
+cellToString Nothing   = "."
+cellToString (Just a)  = show a
 
 
 -- * B2
 
 -- | readSudoku file reads from the file, and either delivers it, or stops
 -- if the file did not contain a sudoku
+-- TODO
 readSudoku :: FilePath -> IO Sudoku
-readSudoku = undefined
+readSudoku fileName = do
+  string <- readFile fileName
+  if (string == "")
+    then error "Not a valid sudoku"
+  else 
+    (if (isSudoku (Sudoku (readRows (lines string))))
+       then return (Sudoku (readRows (lines string)))
+     else error "Not a valid sudoku"
+    )
+    
+  
+
+-- Taken from Test.LeanCheck.Core module. Maps a function to a matrix
+mapT :: (a -> b) -> [[a]] -> [[b]]
+mapT  =  map . map
+
+-- Convert a list of strings into a list of Rows
+readRows :: [[Char]] -> [Row]
+readRows = mapT charToCell 
+
+-- Converts a char to a cell of the same value
+charToCell :: Char -> Cell
+charToCell '.'   = Nothing
+charToCell char  = Just (digitToInt char)  
+
 
 ------------------------------------------------------------------------------
 
@@ -121,23 +145,30 @@ readSudoku = undefined
 
 -- | cell generates an arbitrary cell in a Sudoku
 cell :: Gen (Cell)
-cell = undefined
-
+cell = frequency [(1, digits), (9, empty)]
+  where 
+    digits = Just <$> choose (1,9)
+    empty = return Nothing 
 
 -- * C2
 
 -- | an instance for generating Arbitrary Sudokus
 instance Arbitrary Sudoku where
-  arbitrary = undefined
+  arbitrary = do
+    row <- (vectorOf 9 cell)
+    let rows = [row | n <- [1..9]]
+    return (Sudoku rows)
+    
+    --take 9 $ repeat $ (vectorOf 9 cell) --(Sudoku rows)
 
  -- hint: get to know the QuickCheck function vectorOf
- 
+
 -- * C3
 
 prop_Sudoku :: Sudoku -> Bool
-prop_Sudoku = undefined
+prop_Sudoku sudoku = isSudoku sudoku
   -- hint: this definition is simple!
-  
+
 ------------------------------------------------------------------------------
 
 type Block = [Cell] -- a Row is also a Cell
@@ -146,7 +177,7 @@ type Block = [Cell] -- a Row is also a Cell
 -- * D1
 
 isOkayBlock :: Block -> Bool
-isOkayBlock = undefined
+isOkayBlock block = not (length (nub block) < length block)
 
 
 -- * D2
