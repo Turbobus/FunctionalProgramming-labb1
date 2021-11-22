@@ -3,6 +3,8 @@ module Sudoku where
 import Test.QuickCheck
 import Data.Char(digitToInt)
 import Data.List
+import Data.Maybe
+import Data.Sequence (chunksOf)
 
 ------------------------------------------------------------------------------
 
@@ -48,22 +50,23 @@ allBlankSudoku = Sudoku (replicate 9 row)
 -- puzzle
 isSudoku :: Sudoku -> Bool
 isSudoku (Sudoku [])         = False
-isSudoku (Sudoku (row:rows)) = checkValidNumbers (row:rows) && checkSize (Sudoku (row:rows))
+isSudoku (Sudoku (row:rows)) = checkValidNumbers (row:rows) 
+                               && checkSize (Sudoku (row:rows))
 
 -- Checks if a list of rows contains valid numbers
--- TODO make sure it doesn't just check the first cell in a row ------------------------------------------------------
 checkValidNumbers :: [Row] -> Bool
 checkValidNumbers = foldr ((&&) . all validNumber) True
 
 -- Checks if a Cell contains a valid number, 
 -- helper function for checkValidNumber 
 validNumber :: Cell -> Bool
-validNumber cell = (cell == Nothing) || checkIfCellIsFilled cell
+validNumber cell = isNothing cell || checkIfCellIsFilled cell
 
 -- Check if whole Sudoku board is a 9x9 board
 checkSize :: Sudoku -> Bool
+checkSize (Sudoku [])                                  = False 
 checkSize (Sudoku (row:rows)) | length (row:rows) /= 9 = False
-                              | otherwise              = checkRowSize (row:rows)
+                              | otherwise             = checkRowSize (row:rows)
 
 -- Checks to see if all row sizes are equal to 9,
 -- helper function for checkSize
@@ -77,10 +80,11 @@ checkRowSize (row:rows) = length row == 9 && checkRowSize rows
 -- | isFilled sud checks if sud is completely filled in,
 -- i.e. there are no blanks
 isFilled :: Sudoku -> Bool
+isFilled (Sudoku [])         = False
 isFilled (Sudoku (row:rows)) = all checkIfCellIsFilled row
                                && isFilled (Sudoku rows)
 
--- Helper functions for isFilled, checks if a cell is filled----------------------------------------Slå ihop med ovan 
+-- Helper functions for isFilled, checks if a cell is filled
 checkIfCellIsFilled :: Cell -> Bool
 checkIfCellIsFilled cell = cell `elem` validCells
     where validCells = [Just n | n <- [1..9]]
@@ -93,12 +97,13 @@ checkIfCellIsFilled cell = cell `elem` validCells
 -- | printSudoku sud prints a nice representation of the sudoku sud on
 -- the screen
 printSudoku :: Sudoku -> IO ()
+printSudoku (Sudoku [])         = putStrLn ""
 printSudoku (Sudoku (row:rows)) = putStrLn (buildRows (row:rows))
 
 -- Convert each row into a string
 buildRows :: [Row] -> String
 buildRows []         = ""
-buildRows (row:rows) = rowString ++ "\n" ++ (buildRows rows)
+buildRows (row:rows) = rowString ++ "\n" ++ buildRows rows
      where rowString = unwords [cellToString cells | cells <- row]
 
 -- Converts the cell to a String representing that value
@@ -111,19 +116,18 @@ cellToString (Just a)  = show a
 
 -- | readSudoku file reads from the file, and either delivers it, or stops
 -- if the file did not contain a sudoku
--- TODO
 readSudoku :: FilePath -> IO Sudoku
 readSudoku fileName = do
   string <- readFile fileName
-  if (string == "")
+  if string == ""
     then error "Not a valid sudoku"
-  else 
-    (if (isSudoku (Sudoku (readRows (lines string))))
+  else
+    (if isSudoku (Sudoku (readRows (lines string)))
        then return (Sudoku (readRows (lines string)))
      else error "Not a valid sudoku"
     )
-    
-  
+
+
 
 -- Taken from Test.LeanCheck.Core module. Maps a function to a matrix
 mapT :: (a -> b) -> [[a]] -> [[b]]
@@ -131,12 +135,12 @@ mapT  =  map . map
 
 -- Convert a list of strings into a list of Rows
 readRows :: [[Char]] -> [Row]
-readRows = mapT charToCell 
+readRows = mapT charToCell
 
 -- Converts a char to a cell of the same value
 charToCell :: Char -> Cell
 charToCell '.'   = Nothing
-charToCell char  = Just (digitToInt char)  
+charToCell char  = Just (digitToInt char)
 
 
 ------------------------------------------------------------------------------
@@ -144,30 +148,31 @@ charToCell char  = Just (digitToInt char)
 -- * C1
 
 -- | cell generates an arbitrary cell in a Sudoku
-cell :: Gen (Cell)
+cell :: Gen Cell
 cell = frequency [(1, digits), (9, empty)]
-  where 
+  where
     digits = Just <$> choose (1,9)
-    empty = return Nothing 
+    empty = return Nothing
 
 -- * C2
 
 -- | an instance for generating Arbitrary Sudokus
 instance Arbitrary Sudoku where
   arbitrary = do
-    row <- (vectorOf 9 cell)
+    row <- vectorOf 9 cell
     let rows = [row | n <- [1..9]]
     return (Sudoku rows)
-    
+
     --take 9 $ repeat $ (vectorOf 9 cell) --(Sudoku rows)
 
  -- hint: get to know the QuickCheck function vectorOf
 
 -- * C3
 
+-- Property for sudokus
 prop_Sudoku :: Sudoku -> Bool
-prop_Sudoku sudoku = isSudoku sudoku
-  -- hint: this definition is simple!
+prop_Sudoku = isSudoku
+
 
 ------------------------------------------------------------------------------
 
@@ -176,22 +181,42 @@ type Block = [Cell] -- a Row is also a Cell
 
 -- * D1
 
+-- Removes the Nothings, then removes duplicates.
+-- If after duplicate removal the length is shorter, then
+-- the block had duplicates and is not an okay block
 isOkayBlock :: Block -> Bool
-isOkayBlock block = not (length (nub block) < length block)
-
+isOkayBlock block = length (nub specialBlock) >= length specialBlock
+  where specialBlock = filter isJust block
 
 -- * D2
 
+-- Gets the blocks of a sudoku
 blocks :: Sudoku -> [Block]
-blocks = undefined
+blocks (Sudoku [])         = []
+blocks (Sudoku (row:rows)) = row : t : rows ++ ts ++ getSquare (row:rows)
+  where (t:ts) = transpose (row:rows)
 
+-- Helper function for blocks, gets all the squares(3x3) of a sudoku
+getSquare :: [Row] -> [Block]
+getSquare []         = [] 
+getSquare (row:rows) = 
+  [concatMap (take 3 . drop i) ((take 3 . drop j) (row : rows))
+  | i <- [0, 3, 6], j <- [0, 3, 6]]
+
+-- Verifies that there are a total of 27 blocks for a suduko and
+-- that the length of every block is 9
 prop_blocks_lengths :: Sudoku -> Bool
-prop_blocks_lengths = undefined
+prop_blocks_lengths (Sudoku [])         = False
+prop_blocks_lengths (Sudoku (row:rows)) = length sudBlocks == 27  && 
+                                all (\ x -> length x == 9) sudBlocks
+   where sudBlocks = blocks (Sudoku (row:rows))
 
 -- * D3
 
+-- Checks if all blocks in a sudoku is valid 
 isOkay :: Sudoku -> Bool
-isOkay = undefined
+isOkay (Sudoku [])         = False
+isOkay (Sudoku (row:rows)) = all isOkayBlock (blocks (Sudoku (row:rows)))
 
 
 ---- Part A ends here --------------------------------------------------------
