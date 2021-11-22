@@ -163,8 +163,6 @@ instance Arbitrary Sudoku where
     let rows = [row | n <- [1..9]]
     return (Sudoku rows)
 
-    --take 9 $ repeat $ (vectorOf 9 cell) --(Sudoku rows)
-
  -- hint: get to know the QuickCheck function vectorOf
 
 -- * C3
