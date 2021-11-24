@@ -4,7 +4,6 @@ import Test.QuickCheck
 import Data.Char(digitToInt)
 import Data.List
 import Data.Maybe
-import Data.Sequence (chunksOf)
 
 ------------------------------------------------------------------------------
 
@@ -49,9 +48,8 @@ allBlankSudoku = Sudoku (replicate 9 row)
 -- | isSudoku sud checks if sud is really a valid representation of a sudoku
 -- puzzle
 isSudoku :: Sudoku -> Bool
-isSudoku (Sudoku [])         = False
-isSudoku (Sudoku (row:rows)) = checkValidNumbers (row:rows) 
-                               && checkSize (Sudoku (row:rows))
+isSudoku (Sudoku [])   = False
+isSudoku (Sudoku rows) = checkValidNumbers rows && checkSize (Sudoku rows)
 
 -- Checks if a list of rows contains valid numbers
 checkValidNumbers :: [Row] -> Bool
@@ -64,9 +62,9 @@ validNumber cell = isNothing cell || checkIfCellIsFilled cell
 
 -- Check if whole Sudoku board is a 9x9 board
 checkSize :: Sudoku -> Bool
-checkSize (Sudoku [])                                  = False 
-checkSize (Sudoku (row:rows)) | length (row:rows) /= 9 = False
-                              | otherwise             = checkRowSize (row:rows)
+checkSize (Sudoku [])                      = False 
+checkSize (Sudoku rows) | length rows /= 9 = False
+                        | otherwise        = checkRowSize rows
 
 -- Checks to see if all row sizes are equal to 9,
 -- helper function for checkSize
@@ -80,7 +78,7 @@ checkRowSize (row:rows) = length row == 9 && checkRowSize rows
 -- | isFilled sud checks if sud is completely filled in,
 -- i.e. there are no blanks
 isFilled :: Sudoku -> Bool
-isFilled (Sudoku [])         = False
+isFilled (Sudoku [])         = True
 isFilled (Sudoku (row:rows)) = all checkIfCellIsFilled row
                                && isFilled (Sudoku rows)
 
@@ -98,7 +96,7 @@ checkIfCellIsFilled cell = cell `elem` validCells
 -- the screen
 printSudoku :: Sudoku -> IO ()
 printSudoku (Sudoku [])         = putStrLn ""
-printSudoku (Sudoku (row:rows)) = putStrLn (buildRows (row:rows))
+printSudoku (Sudoku rows) = putStrLn (buildRows rows)
 
 -- Convert each row into a string
 buildRows :: [Row] -> String
@@ -191,30 +189,30 @@ isOkayBlock block = length (nub specialBlock) >= length specialBlock
 -- Gets the blocks of a sudoku
 blocks :: Sudoku -> [Block]
 blocks (Sudoku [])         = []
-blocks (Sudoku (row:rows)) = row : t : rows ++ ts ++ getSquare (row:rows)
-  where (t:ts) = transpose (row:rows)
+blocks (Sudoku rows) = rows ++ trasposed ++ getSquare rows
+  where trasposed    = transpose rows
 
 -- Helper function for blocks, gets all the squares(3x3) of a sudoku
 getSquare :: [Row] -> [Block]
 getSquare []         = [] 
-getSquare (row:rows) = 
-  [concatMap (take 3 . drop i) ((take 3 . drop j) (row : rows))
+getSquare rows = 
+  [concatMap (take 3 . drop i) ((take 3 . drop j) rows)
   | i <- [0, 3, 6], j <- [0, 3, 6]]
 
 -- Verifies that there are a total of 27 blocks for a suduko and
 -- that the length of every block is 9
 prop_blocks_lengths :: Sudoku -> Bool
 prop_blocks_lengths (Sudoku [])         = False
-prop_blocks_lengths (Sudoku (row:rows)) = length sudBlocks == 27  && 
-                                all (\ x -> length x == 9) sudBlocks
-   where sudBlocks = blocks (Sudoku (row:rows))
+prop_blocks_lengths (Sudoku rows) = length sudBlocks == 27  && 
+                                  all (\ x -> length x == 9) sudBlocks
+   where sudBlocks = blocks (Sudoku rows)
 
 -- * D3
 
 -- Checks if all blocks in a sudoku is valid 
 isOkay :: Sudoku -> Bool
-isOkay (Sudoku [])         = False
-isOkay (Sudoku (row:rows)) = all isOkayBlock (blocks (Sudoku (row:rows)))
+isOkay (Sudoku [])   = False
+isOkay (Sudoku rows) = all isOkayBlock (blocks (Sudoku rows))
 
 
 ---- Part A ends here --------------------------------------------------------
