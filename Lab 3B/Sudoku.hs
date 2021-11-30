@@ -78,7 +78,7 @@ validNumber cell = isNothing cell || checkIfCellIsFilled cell
 
 -- Check if whole Sudoku board is a 9x9 board
 checkSize :: Sudoku -> Bool
-checkSize (Sudoku [])                      = False 
+checkSize (Sudoku [])                      = False
 checkSize (Sudoku rows) | length rows /= 9 = False
                         | otherwise        = checkRowSize rows
 
@@ -111,7 +111,7 @@ checkIfCellIsFilled cell = cell `elem` validCells
 -- | printSudoku sud prints a nice representation of the sudoku sud on
 -- the screen
 printSudoku :: Sudoku -> IO ()
-printSudoku (Sudoku [])         = putStrLn ""
+printSudoku (Sudoku [])   = putStrLn ""
 printSudoku (Sudoku rows) = putStrLn (buildRows rows)
 
 -- Convert each row into a string
@@ -210,8 +210,8 @@ blocks (Sudoku rows) = rows ++ trasposed ++ getSquare rows
 
 -- Helper function for blocks, gets all the squares(3x3) of a sudoku
 getSquare :: [Row] -> [Block]
-getSquare []         = [] 
-getSquare rows = 
+getSquare []         = []
+getSquare rows =
   [concatMap (take 3 . drop i) ((take 3 . drop j) rows)
   | i <- [0, 3, 6], j <- [0, 3, 6]]
 
@@ -219,7 +219,7 @@ getSquare rows =
 -- that the length of every block is 9
 prop_blocks_lengths :: Sudoku -> Bool
 prop_blocks_lengths (Sudoku [])         = False
-prop_blocks_lengths (Sudoku rows) = length sudBlocks == 27  && 
+prop_blocks_lengths (Sudoku rows) = length sudBlocks == 27  &&
                                   all (\ x -> length x == 9) sudBlocks
    where sudBlocks = blocks (Sudoku rows)
 
@@ -245,10 +245,10 @@ type Pos = (Int,Int)
 -- Get all the positions of blanks in a sudoku
 blanks :: Sudoku -> [Pos]
 blanks (Sudoku rows) = getPositions (elemIndices Nothing (concat rows))
-  where getPositions list = map getElement list 
+  where getPositions = map getElement
         getElement i =  allPos !! i
         allPos = [(x,y) | x <- [0..8], y <-[0..8]]
-    
+
 
 -- Property for using blank function for allBlankSudoku
 prop_blanks_allBlanks :: Bool
@@ -261,7 +261,7 @@ prop_blanks_allBlanks = length (blanks allBlankSudoku) == 9*9
 (!!=) :: [a] -> (Int, a) -> [a]
 xs !!= (i,y) = replaceNth (i,y) xs
   where replaceNth  _  [] = []
-        replaceNth (i, y) (x:xs) 
+        replaceNth (i, y) (x:xs)
           | i == 0    = y:xs
           | otherwise = x:replaceNth (i-1, y) xs
 
@@ -269,10 +269,10 @@ xs !!= (i,y) = replaceNth (i,y) xs
 -- Checks that the length of list is the same after (!!=)
 -- and that the new value is in the list
 prop_bangBangEquals_correct :: [Int] -> (Int, Int) -> Property
-prop_bangBangEquals_correct list (i,st) = list /= [] && 0 <= i 
+prop_bangBangEquals_correct list (i,st) = list /= [] && 0 <= i
   && i < length list ==>
   length list == length newList && st `elem` newList
-  where newList = (list !!= (i,st))
+  where newList = list !!= (i,st)
 
 
 -- * E3
@@ -284,7 +284,7 @@ update (Sudoku rows) (y,x) cell = Sudoku (rows !!= (y, newRow))
 
 -- Checks that the value was updated on the given position
 prop_update_updated :: Sudoku -> Pos -> Cell -> Bool
-prop_update_updated (Sudoku rows) (y,x) cell = 
+prop_update_updated (Sudoku rows) (y,x) cell =
   ((updatedRows !! y') !! x') == cell
   where (Sudoku updatedRows) = update (Sudoku rows) (y',x') cell
         y' = min (abs y) 8
@@ -295,27 +295,83 @@ prop_update_updated (Sudoku rows) (y,x) cell =
 
 -- * F1
 
+-- Solve a given sudoku, returns the solution 
 solve :: Sudoku -> Maybe Sudoku
-solve sud | length (solve' sud []) == 0 = Nothing
-          | otherwise          = Just (head (solve' sud []))
-  -- where (s:ss) = (solve' sud [])
+solve sud = listToMaybe solved
+      where solved = solve' (blanks sud) sud
 
-
-solve' :: Sudoku -> [Sudoku] -> [Sudoku]
-solve' sud list 
-      | (not (isSudoku sud) || not (isOkay sud)) = list
-      | isFilled sud                 = sud : list
-      | otherwise                    = foldr (solve') list sudokus 
+-- Hepler function for solve, returns a list of solutions
+solve' :: [Pos] -> Sudoku -> [Sudoku]
+solve' []     sud | notValidSudoku sud = []
+                  | otherwise          = [sud]
+solve' (p:ps) sud | notValidSudoku sud = []
+                  | otherwise          = concatMap (solve' ps) sudokus
       where cells   = [Just n | n <- [1..9]]
-            sudokus = map (update sud (head (blanks sud))) cells
-  
+            sudokus = map (update sud p) cells
 
+-- Returns true if the given sudoku is not valid
+notValidSudoku :: Sudoku -> Bool
+notValidSudoku sud = not (isSudoku sud) || not (isOkay sud)
 
-  
 -- * F2
+
+-- Reads a sudoku from a file and prints the solution
+readAndSolve :: FilePath -> IO ()
+readAndSolve path = do 
+     sud <- readSudoku path
+     let maybeSud = solve sud
+     rightPrint maybeSud
+  where rightPrint maybeSud 
+               | isNothing maybeSud = putStrLn "(no solution)"
+               | otherwise          = printSudoku (fromJust maybeSud)
 
 
 -- * F3
+-- Checks if a sudoku is a solution of another sudoku
+isSolutionOf :: Sudoku -> Sudoku -> Bool
+isSolutionOf (Sudoku solRows) (Sudoku sudRows) = 
+         isOkay (Sudoku solRows) && isFilled (Sudoku solRows) && and isSolution
+   where isSolution = zipWith compareMaybe (concat solRows) (concat sudRows)
+
+-- Compares the value of two maybe types
+compareMaybe :: (Eq a) => Maybe a -> Maybe a -> Bool
+compareMaybe Nothing _ = True
+compareMaybe _ Nothing = True
+compareMaybe (Just x) (Just y) = x == y
 
 
 -- * F4
+
+-- Function for quickcheck to see if the solve function produces 
+-- correct solutions
+prop_SolveSound :: Sudoku -> Property
+prop_SolveSound sud = isJust solvedSud ==> 
+         isSolutionOf (fromJust solvedSud) sud
+   where solvedSud = solve sud
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
