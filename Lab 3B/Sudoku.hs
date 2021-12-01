@@ -269,10 +269,11 @@ xs !!= (i,y) = replaceNth (i,y) xs
 -- Checks that the length of list is the same after (!!=)
 -- and that the new value is in the list
 prop_bangBangEquals_correct :: [Int] -> (Int, Int) -> Property
-prop_bangBangEquals_correct list (i,st) = list /= [] && 0 <= i
-  && i < length list ==>
+prop_bangBangEquals_correct list (i,st) = list /= [] ==>
   length list == length newList && st `elem` newList
-  where newList = list !!= (i,st)
+  where newList = list !!= (i',st)
+        i' = mod i (length list)
+        
 
 
 -- * E3
@@ -297,35 +298,17 @@ prop_update_updated (Sudoku rows) (y,x) cell =
 
 -- Solve a given sudoku, returns the solution 
 solve :: Sudoku -> Maybe Sudoku
-solve sud | notValidSudoku sud = Nothing
-          | isFilled sud       = Just sud
+solve sud | not (isSudoku sud) = Nothing
           | otherwise          = listToMaybe solved
-      where solved = solve' (blanks sud) sud
-            
-{-
--- Solve a given sudoku, returns the solution 
-solve :: Sudoku -> Maybe Sudoku
-solve sud = listToMaybe solved
       where solved = solve' (blanks sud) sud
 
 -- Hepler function for solve, returns a list of solutions
 solve' :: [Pos] -> Sudoku -> [Sudoku]
-solve' []     sud | notValidSudoku sud = []
-                  | otherwise          = [sud]
-solve' (p:ps) sud | notValidSudoku sud = []
-                  | otherwise          = concatMap (solve' ps) sudokus
+solve' []     sud   = [sud]
+solve' (p:ps) sud   = concatMap (solve' ps) sudokus
       where cells   = [Just n | n <- [1..9]]
-            sudokus = map (update sud p) cells
--}
-solve' :: [Pos] -> Sudoku -> [Sudoku]
-solve' (b:bs) sud   = catMaybes (map (solve) sudokus)
-      where cells   = [Just n | n <- [1..9]]
-            sudokus = map (update sud b) cells
-          
+            sudokus = filter isOkay (map (update sud p) cells)
 
--- Returns true if the given sudoku is not valid
-notValidSudoku :: Sudoku -> Bool
-notValidSudoku sud = not (isSudoku sud) || not (isOkay sud)
 
 -- * F2
 
