@@ -297,6 +297,14 @@ prop_update_updated (Sudoku rows) (y,x) cell =
 
 -- Solve a given sudoku, returns the solution 
 solve :: Sudoku -> Maybe Sudoku
+solve sud | notValidSudoku sud = Nothing
+          | isFilled sud       = Just sud
+          | otherwise          = listToMaybe solved
+      where solved = solve' (blanks sud) sud
+            
+{-
+-- Solve a given sudoku, returns the solution 
+solve :: Sudoku -> Maybe Sudoku
 solve sud = listToMaybe solved
       where solved = solve' (blanks sud) sud
 
@@ -308,6 +316,12 @@ solve' (p:ps) sud | notValidSudoku sud = []
                   | otherwise          = concatMap (solve' ps) sudokus
       where cells   = [Just n | n <- [1..9]]
             sudokus = map (update sud p) cells
+-}
+solve' :: [Pos] -> Sudoku -> [Sudoku]
+solve' (b:bs) sud   = catMaybes (map (solve) sudokus)
+      where cells   = [Just n | n <- [1..9]]
+            sudokus = map (update sud b) cells
+          
 
 -- Returns true if the given sudoku is not valid
 notValidSudoku :: Sudoku -> Bool
