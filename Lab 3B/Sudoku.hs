@@ -267,10 +267,10 @@ xs !!= (i,y) = replaceNth (i,y) xs
 
 
 -- Checks that the length of list is the same after (!!=)
--- and that the new value is in the list
-prop_bangBangEquals_correct :: [Int] -> (Int, Int) -> Property
+-- and that the new value is in the correct position in the new list 
+prop_bangBangEquals_correct :: [Char] -> (Int, Char) -> Property
 prop_bangBangEquals_correct list (i,st) = list /= [] ==>
-  length list == length newList && st `elem` newList
+  length list == length newList && st `elem` newList && st == newList !! i'
   where newList = list !!= (i',st)
         i' = mod i (length list)
         
