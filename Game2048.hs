@@ -1,5 +1,5 @@
 
-import Test.QuickCheck ()
+import Test.QuickCheck
 import Data.List 
 import Data.Maybe (isJust, isNothing)
 import System.Random
@@ -97,9 +97,6 @@ haveWonOrLost board | won board  = Just True
                     | otherwise  = Nothing
     
        
--- TODO: quickCheck
-
-
 -- Get a random new tile
 getRandomTile :: StdGen -> (Tile, StdGen)
 getRandomTile = getRandomFromList [Just 2, Just 2, Just 2, Just 4, Just 4]
@@ -203,4 +200,34 @@ addTogheter tiles@(Just n, Just m) | n == m    = (Just (n+m), Nothing)
                                    | otherwise = tiles
 addTogheter (Nothing, Just n)      = (Just n, Nothing) 
 addTogheter rest                   = rest
+
+
+-- TODO: quickCheck
+
+instance Arbitrary Board where
+  arbitrary = do
+    row <- vectorOf 4 tile
+    let rows = [row | n <- [0..3]]
+    return (Board rows)
+
+
+tile :: Gen Tile
+tile = frequency [(6, maker), (4, empty)]
+  where
+    maker = Just <$> 2^digits
+    digits = choose (0,11)
+    empty = return Nothing
+
+
+
+
+
+
+
+
+
+
+
+
+
 
