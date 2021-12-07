@@ -16,19 +16,87 @@ newtype Board = Board [Row]
 -- A position inside the board
 type Pos = (Int,Int)
 
+exampleWon :: Board
+exampleWon =
+    Board
+      [ [j 3,j 6,n  ,n  ]
+      , [n  ,j 5,n  ,n  ]
+      , [n  ,n  ,j 9,j 2]
+      , [n  ,n  ,j 1024  ,j 1024]
+      ]
+  where
+    n = Nothing
+    j = Just
+
+exampleLost :: Board
+exampleLost =
+    Board
+      [ [j 5,j 2,j 3 ,j 4 ]
+      , [j 4 ,j 6,j 7 ,j 8 ]
+      , [j 9 ,j 10 ,n ,j 12]
+      , [j 13 ,j 14 ,j 15,j 16]
+      ]
+  where
+    n = Nothing
+    j = Just
+
 
 -- Setups a new board when game is started
 setupNewBoard :: StdGen -> Board
-setupNewBoard g = placeTile firtPlacement pos2 tile2
-    where firtPlacement  = placeTile emptyBoard pos1 tile1
+setupNewBoard g = placeNewTile firstPlacement f
+    where firstPlacement = placeTile emptyBoard pos1 tile1
           emptyBoard     = Board (replicate 4 (replicate 4 Nothing))
-          ((tile1, g'), (tile2, f)) = (getRandomTile g, getRandomTile g')
-          ((pos1, f'), (pos2, _))  = (getRandomFromList (blanks emptyBoard) f,
-                                   getRandomFromList (blanks firtPlacement) f')
+          (tile1, g')    = getRandomTile g
+          (pos1, f)      = getRandomFromList (blanks emptyBoard) g'
 
 
--- TODO: make a main function (WIN / LOSE also)
+main :: IO()
+main = do
+    g <- randomIO :: IO Int
+    let board = setupNewBoard (mkStdGen g) 
+    play board
 
+
+play :: Board -> IO()
+play board = case (haveWonOrLost board) of
+    Just True  -> printHelper board "\nYou have won!\n" 
+    Just False -> printHelper board "\nYou lost!! :(\n"
+    Nothing    -> do
+      printHelper board "Make a move: "
+      input <- getChar
+      g <- randomIO :: IO Int
+      let newBoard = move input board (mkStdGen g)
+      if board == newBoard
+        then play newBoard
+      else play (placeNewTile newBoard (mkStdGen g))  
+
+printHelper :: Board -> String -> IO()
+printHelper b s = do
+    putStr "\n"
+    printBoard b
+    putStr s
+
+won :: Board -> Bool
+won (Board rows) | maximum (concat rows) >= Just 2048 = True
+                 | otherwise                          = False
+
+lost :: Board -> Bool
+lost (Board rows) | Nothing `elem` (concat rows) = False
+                  | otherwise                    = moveAvailable
+      where moveAvailable = helper (transpose rows) && helper rows
+            helper r = not (True `elem` (map canMakeMove r))
+
+canMakeMove :: Row -> Bool
+canMakeMove row | maxLength > 1 = True
+                | otherwise     = False
+      where maxLength = maximum (map length (group row))
+
+haveWonOrLost :: Board -> Maybe Bool
+haveWonOrLost board | won board  = Just True
+                    | lost board = Just False
+                    | otherwise  = Nothing
+    
+       
 -- TODO: quickCheck
 
 
@@ -75,7 +143,7 @@ blanks :: Board -> [Pos]
 blanks (Board rows) = getPositions (elemIndices Nothing (concat rows))
   where getPositions = map getElement
         getElement i =  allPos !! i
-        allPos = [(x,y) | x <- [0..3], y <- [0..3]]
+        allPos = [(x,y) | x <- [0..length rows-1], y <- [0..length rows-1]]
 
 
 -- Places a random new tile
@@ -87,11 +155,11 @@ placeNewTile board g = placeTile board pos randTile
           
 -- Functions for moving the board, standard is moving to the left
 move :: Char -> Board -> StdGen -> Board
-move char board g | char == 'w' = placeNewTile (moveUp board) g
-                  | char == 'a' = placeNewTile (moveLeft board) g
-                  | char == 'd' = placeNewTile (moveRight board) g
-                  | char == 's' = placeNewTile (moveDown board) g
-
+move char board g | char == 'w' = moveUp board
+                  | char == 'a' = moveLeft board
+                  | char == 'd' = moveRight board
+                  | char == 's' = moveDown board
+                  | otherwise   = board
 
 -- Moves tiles right
 moveRight :: Board -> Board
