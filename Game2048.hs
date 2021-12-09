@@ -2,6 +2,7 @@
 import Test.QuickCheck
 import Data.List
 import Data.Maybe (isJust, isNothing)
+import Data.Char
 import System.Random
 
 
@@ -9,12 +10,27 @@ import System.Random
 type Tile = Maybe Int
 type Row  = [Tile]
 
+
 -- Represents a Board
 newtype Board = Board [Row]
  deriving ( Show, Eq )
 
+
 -- A position inside the board
 type Pos = (Int,Int)
+
+
+
+
+-- TODO
+-- Make it so you can play after 2048
+-- Ask for help with property
+-- GUI?
+-- Ask in main for board size, fix crash cases
+-- Look over functions 
+-- hlint
+
+
 
 exampleWon :: Board
 exampleWon =
@@ -27,6 +43,18 @@ exampleWon =
   where
     n = Nothing
     j = Just
+
+exampleBlanks :: Board
+exampleBlanks =
+    Board
+      [ [n,n,n,n  ]
+      , [n ,n,n  ,n  ]
+      , [n  ,n  ,n,n]
+      , [n  ,n  ,n  ,n]
+      ]
+  where
+    n = Nothing
+    j = Just    
 
 exampleLost :: Board
 exampleLost =
@@ -42,10 +70,10 @@ exampleLost =
 
 
 -- Setups a new board when game is started
-setupNewBoard :: StdGen -> Board
-setupNewBoard g = placeNewTile firstPlacement f
+setupNewBoard :: Int -> StdGen -> Board
+setupNewBoard n g = placeNewTile firstPlacement f
     where firstPlacement = placeTile emptyBoard pos1 tile1
-          emptyBoard     = Board (replicate 4 (replicate 4 Nothing))
+          emptyBoard     = Board (replicate n (replicate n Nothing))
           (tile1, g')    = getRandomTile g
           (pos1, f)      = getRandomFromList (blanks emptyBoard) g'
 
@@ -53,7 +81,10 @@ setupNewBoard g = placeNewTile firstPlacement f
 main :: IO()
 main = do
     g <- randomIO :: IO Int
-    let board = setupNewBoard (mkStdGen g)
+    putStr "What board size do you want?(nxn) n= "
+    x <- getChar
+    let n = digitToInt x 
+    let board = setupNewBoard n (mkStdGen g)
     play board
 
 
@@ -65,7 +96,7 @@ play board = case (haveWonOrLost board) of
       printHelper board "Make a move: "
       input <- getChar
       g <- randomIO :: IO Int
-      let newBoard = move input board (mkStdGen g)
+      let newBoard = move input board
       if board == newBoard
         then play newBoard
       else play (placeNewTile newBoard (mkStdGen g))
@@ -83,8 +114,8 @@ won (Board rows) | maximum (concat rows) >= Just 2048 = True
 lost :: Board -> Bool
 lost (Board rows) | Nothing `elem` (concat rows) = False
                   | otherwise                    = moveAvailable
-      where moveAvailable = helper (transpose rows) && helper rows
-            helper r = notElem True (map canMakeMove r)
+      where moveAvailable = available (transpose rows) && available rows
+            available r   = True `notElem` (map canMakeMove r)
 
 canMakeMove :: Row -> Bool
 canMakeMove row | maxLength > 1 = True
@@ -151,12 +182,12 @@ placeNewTile board g = placeTile board pos randTile
 
 
 -- Functions for moving the board, standard is moving to the left
-move :: Char -> Board -> StdGen -> Board
-move char board g | char == 'w' = moveUp board
-                  | char == 'a' = moveLeft board
-                  | char == 'd' = moveRight board
-                  | char == 's' = moveDown board
-                  | otherwise   = board
+move :: Char -> Board -> Board
+move char board | char == 'w' = moveUp board
+                | char == 'a' = moveLeft board
+                | char == 'd' = moveRight board
+                | char == 's' = moveDown board
+                | otherwise   = board
 
 -- Moves tiles right
 moveRight :: Board -> Board
@@ -203,43 +234,55 @@ addTogheter rest                   = rest
 
 
 -- TODO: quickCheck
--- Check win and lost
--- Check if a tile has moved
+-- Check canMakeMove
 
+
+-- Generator for non empty boards
 instance Arbitrary Board where
   arbitrary = do
-    row <- vectorOf 4 tile
-    let rows = [row | n <- [0..3]]
-    return (Board rows)
+    rows <- vectorOf 4 (vectorOf 4 tile)
+    i <- arbitrary
+    if (prop_2048 (Board rows))
+      then return (Board rows)
+    else  
+      return (setupNewBoard 4 (mkStdGen i))
 
-
+-- Generate a tile
 tile :: Gen Tile
 tile = do
     num <- choose (1,11) :: Gen Int
-    frequency [(5, return $ Just (2^num)), (5, empty)]
-  where empty = return Nothing
+    frequency [(5, return $ Just (2^num)), (5, return Nothing)]
 
+-- Property for a 2048 board, it can not be empty
+prop_2048 :: Board -> Bool
+prop_2048 (Board rows) = length (filter isNothing (concat rows)) /= 0
 
 -- Property for testing if a new tile is placed
-prop_placeNewTile :: Board -> Property 
-prop_placeNewTile (Board rows) = Nothing `elem` (concat rows) ==> (placeNewTile (Board rows) (mkStdGen 55)) /= (Board rows)
-                          
+prop_placeNewTile :: Board -> Int -> Property
+prop_placeNewTile (Board rows) i = Nothing `elem` (concat rows) ==> (placeNewTile (Board rows) (mkStdGen i)) /= (Board rows)
+
 
 -- Property for testing if board is a winning board
 prop_won :: Board -> Bool
-prop_won (Board rows) | won (Board rows) == True = Just 2048 `elem` (concat rows)
-                      | otherwise                = Just 2048 `notElem` (concat rows)
+prop_won (Board rows) | won (Board rows) = Just 2048 `elem` (concat rows)
+                      | otherwise        = Just 2048 `notElem` (concat rows)
 
--- Property for testing if board is a losing board
+-- Property for testing if board is a losing board, TODO: something more?
 prop_lost :: Board -> Bool
-prop_lost (Board rows) | lost (Board rows) == True = undefined
-                       | otherwise                 = undefined
+prop_lost (Board rows) | lost (Board rows) = Nothing `notElem` (concat rows)
+                       | otherwise         = Nothing `elem` (concat rows) || any canMakeMove rows || any canMakeMove (transpose rows)
 
 
+-- Property for testig if we made a move
+prop_move :: Board -> Int -> Bool
+prop_move board i  | c == 'w' = False `notElem` (map testRow (map reverse (transpose rows)))
+                   | c == 's' = False `notElem` (map testRow (transpose rows)) 
+                   | c == 'a' = False `notElem` (map testRow (map reverse rows))
+                   | c == 'd' = False `notElem` (map testRow rows) 
+      where (Board rows) = move c board
+            c = fst (getRandomFromList ['w','a','s','d'] (mkStdGen i))
+            testRow row = length (takeWhile (isNothing) row) == length (filter isNothing row)
 
 
-
-
-
-
-
+prop_canMakeMove :: Board -> Bool
+prop_canMakeMove board = undefined
