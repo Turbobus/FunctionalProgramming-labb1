@@ -151,7 +151,7 @@ placeNewTile board g = placeTile board pos randTile
 
 
 -- Functions for moving the board, standard is moving to the left
-move :: Char -> Board -> StdGen -> Board
+move :: Char -> Board -> StdGen -> Board -- Remove StdGen???
 move char board g | char == 'w' = moveUp board
                   | char == 'a' = moveLeft board
                   | char == 'd' = moveRight board
