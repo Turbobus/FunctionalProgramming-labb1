@@ -4,9 +4,13 @@ import Data.List
 import Data.Maybe (isJust, isNothing)
 import Data.Char
 import System.Random
+import Data.IORef
 
+import Graphics.UI.Threepenny.Core as UI
+import qualified Graphics.UI.Threepenny as UI
+import Graphics.UI.Threepenny.Events
 
--- Representation of 2048 puzzles 
+-- Representation of 2048 boards 
 type Tile = Maybe Int
 type Row  = [Tile]
 
@@ -20,17 +24,14 @@ newtype Board = Board [Row]
 type Pos = (Int,Int)
 
 
-
-
 -- TODO
--- Make it so you can play after 2048
--- Ask for help with property
+-- Make it so you can play after 2048, 👌
+-- Ask for help with property, in progress 👌
 -- GUI?
--- Ask in main for board size, fix crash cases
+-- Ask in main for board size, fix crash cases 👌
+-- Score??
 -- Look over functions 
 -- hlint
-
-
 
 exampleWon :: Board
 exampleWon =
@@ -54,7 +55,7 @@ exampleBlanks =
       ]
   where
     n = Nothing
-    j = Just    
+    j = Just
 
 exampleLost :: Board
 exampleLost =
@@ -80,17 +81,60 @@ setupNewBoard n g = placeNewTile firstPlacement f
 
 main :: IO()
 main = do
+    startGUI defaultConfig setup
     g <- randomIO :: IO Int
-    putStr "What board size do you want?(nxn) n= "
-    x <- getChar
-    let n = digitToInt x 
-    let board = setupNewBoard n (mkStdGen g)
-    play board
+    -- putStr "What board size do you want? n >= 2 (nxn) n= "
+    -- x <- getChar
+    -- let n = digitToInt x
+    let board = setupNewBoard 4 (mkStdGen g)
+   
+    play board False
+
+setup :: Window -> UI ()
+setup w = do
+    return w # set title "2048"
+    output <- UI.h3 #. "out" 
+        # set text "What board size do you want? n >= 2 (nxn) n= "
+    input <- UI.input #. "in"
+    testgrid <- UI.grid (toUIBoard exampleWon)
+        # set style [("width","300px"),("height","300px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed")]
+        # set (attr "tabindex") "1" -- allow key pressed
+        
+
+    getBody w #+ [element testgrid] #+ [element output] #+ [element input]
+    body <- getBody w
+
+    on UI.keydown body $ \c ->
+        element output # set text ("Keycode: " ++ show c)
+
+    -- w : 87, a : 65, s : 83, d : 68   
+    -- up : 38, down : 40, left : 37, right : 39
 
 
-play :: Board -> IO()
-play board = case (haveWonOrLost board) of
-    Just True  -> printHelper board "\nYou have won!\n"
+
+------------------------------------------------------------------------------}
+
+toUIBoard :: Board -> [[UI Element]]
+toUIBoard (Board rows) = (map . map) tileToUIElement rows
+
+
+tileToUIElement :: Tile -> UI Element
+tileToUIElement tile = do
+            out  <- UI.div # set text (tileToString tile)
+            UI.div #. "elem"
+                # set style [("display", "flex"),("justify-content","center"),("align-items", "center"), ("width","100%"),("height","100%"),("border","solid black 1px"), ("background","#eee"),("border-radius","10px")]
+                #+ [element out]
+
+-------------------------------------------------------------------------------------
+
+play :: Board -> Bool -> IO()
+play board continue = case (haveWonOrLost board continue) of
+    Just True  -> do
+                    printHelper board "\nYou have won!\n\nDo you want to continue? y/n?"
+                    input <- getChar
+                    if(input == 'y')
+                      then play board True
+                    else putStr "\nGoodbye!\n"
     Just False -> printHelper board "\nYou lost!! :(\n"
     Nothing    -> do
       printHelper board "Make a move: "
@@ -98,8 +142,8 @@ play board = case (haveWonOrLost board) of
       g <- randomIO :: IO Int
       let newBoard = move input board
       if board == newBoard
-        then play newBoard
-      else play (placeNewTile newBoard (mkStdGen g))
+        then play newBoard continue
+      else play (placeNewTile newBoard (mkStdGen g)) continue
 
 printHelper :: Board -> String -> IO()
 printHelper b s = do
@@ -118,14 +162,13 @@ lost (Board rows) | Nothing `elem` (concat rows) = False
             available r   = True `notElem` (map canMakeMove r)
 
 canMakeMove :: Row -> Bool
-canMakeMove row | maxLength > 1 = True
-                | otherwise     = False
+canMakeMove row = maxLength > 1
       where maxLength = maximum (map length (group row))
 
-haveWonOrLost :: Board -> Maybe Bool
-haveWonOrLost board | won board  = Just True
-                    | lost board = Just False
-                    | otherwise  = Nothing
+haveWonOrLost :: Board -> Bool -> Maybe Bool
+haveWonOrLost board con | won board && con == False = Just True
+                        | lost board                = Just False
+                        | otherwise                 = Nothing
 
 
 -- Get a random new tile
@@ -244,7 +287,7 @@ instance Arbitrary Board where
     i <- arbitrary
     if (prop_2048 (Board rows))
       then return (Board rows)
-    else  
+    else
       return (setupNewBoard 4 (mkStdGen i))
 
 -- Generate a tile
@@ -253,9 +296,11 @@ tile = do
     num <- choose (1,11) :: Gen Int
     frequency [(5, return $ Just (2^num)), (5, return Nothing)]
 
--- Property for a 2048 board, it can not be empty
+-- Property for a 2048 board, it can not be empty and should be a square
 prop_2048 :: Board -> Bool
-prop_2048 (Board rows) = length (filter isNothing (concat rows)) /= 0
+prop_2048 (Board rows) = length (filter isNothing (concat rows)) /= 0 && all validLength rows
+    where validLength list = length list == length rows
+
 
 -- Property for testing if a new tile is placed
 prop_placeNewTile :: Board -> Int -> Property
@@ -276,13 +321,11 @@ prop_lost (Board rows) | lost (Board rows) = Nothing `notElem` (concat rows)
 -- Property for testig if we made a move
 prop_move :: Board -> Int -> Bool
 prop_move board i  | c == 'w' = False `notElem` (map testRow (map reverse (transpose rows)))
-                   | c == 's' = False `notElem` (map testRow (transpose rows)) 
+                   | c == 's' = False `notElem` (map testRow (transpose rows))
                    | c == 'a' = False `notElem` (map testRow (map reverse rows))
-                   | c == 'd' = False `notElem` (map testRow rows) 
+                   | c == 'd' = False `notElem` (map testRow rows)
       where (Board rows) = move c board
             c = fst (getRandomFromList ['w','a','s','d'] (mkStdGen i))
             testRow row = length (takeWhile (isNothing) row) == length (filter isNothing row)
 
 
-prop_canMakeMove :: Board -> Bool
-prop_canMakeMove board = undefined
