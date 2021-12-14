@@ -9,6 +9,7 @@ import Data.IORef
 import Graphics.UI.Threepenny.Core as UI
 import qualified Graphics.UI.Threepenny as UI
 import Graphics.UI.Threepenny.Events
+import Graphics.UI.Threepenny (rows)
 
 -- Representation of 2048 boards 
 type Tile = Maybe Int
@@ -79,37 +80,102 @@ setupNewBoard n g = placeNewTile firstPlacement f
           (pos1, f)      = getRandomFromList (blanks emptyBoard) g'
 
 
+-- Uses GUI
 main :: IO()
 main = do
     startGUI defaultConfig setup
+
+-- Uses terminal
+main' :: IO()
+main' = do
     g <- randomIO :: IO Int
-    -- putStr "What board size do you want? n >= 2 (nxn) n= "
-    -- x <- getChar
-    -- let n = digitToInt x
-    let board = setupNewBoard 4 (mkStdGen g)
-   
+    putStr "What board size do you want? n >= 2 (nxn) n= "
+    x <- getChar
+    let n = digitToInt x
+    let board = setupNewBoard n (mkStdGen g)
     play board False
 
 setup :: Window -> UI ()
 setup w = do
     return w # set title "2048"
-    output <- UI.h3 #. "out" 
+    output <- UI.h3 #. "out"
         # set text "What board size do you want? n >= 2 (nxn) n= "
+        # set style [("text-aling","center")]
     input <- UI.input #. "in"
-    testgrid <- UI.grid (toUIBoard exampleWon)
-        # set style [("width","300px"),("height","300px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed")]
-        # set (attr "tabindex") "1" -- allow key pressed
-        
+        # set style [("text-aling","center")]
+        # set UI.maxlength 1
+    button <- UI.button # set text "Confirm"
+        # set style [("text-aling","center")]
+    --board <- liftIO $ newIORef (toUIBoard exampleWon)
+    --testgrid <- UI.grid (liftIO $ readIORef board) --[[]]
+    
+    let board = setupNewBoard 4 (mkStdGen 45345) 
+    boardRef <- liftIO $ newIORef board
+    --board2 <- liftIO $ readIORef boardRef
 
-    getBody w #+ [element testgrid] #+ [element output] #+ [element input]
+    testgrid <- UI.grid (toUIBoard board) --[[]]
+        # set style [("width","300px"),("height","300px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed"),("border-spacing","10px")]
+        # set (attr "tabindex") "1" -- allow key pressed
+    grid <- liftIO $ newIORef testgrid
+
+    getBody w #+ [element output,
+                  element input,
+                  element button,
+                  element testgrid] -- #+ [element output] #+ [element input]
     body <- getBody w
 
-    on UI.keydown body $ \c ->
-        element output # set text ("Keycode: " ++ show c)
+    on UI.click button $ \event -> do
+            UI.delete testgrid
+            c <- get value input
+            let n = digitToInt (head c)
+            g <- liftIO (randomIO :: IO Int)
+            let board = setupNewBoard n (mkStdGen g)
+            ele <- getElementsByClassName w "table"
+            UI.delete (head ele)
+            newgrid <- UI.grid (toUIBoard board)
+                # set style [("width","300px"),("height","300px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed"),("border-spacing","10px")]
+                # set (attr "tabindex") "1" -- allow key pressed
+            liftIO $ writeIORef grid newgrid
+            liftIO $ writeIORef boardRef board
+            getBody w #+ [liftIO (readIORef grid)]
+            
+            UI.delete input
+            UI.delete button
+
+    on UI.keydown body $ \c -> do
+        UI.delete input
+        UI.delete button
+        let char = toEnum c :: Char
+        --liftIO $ print char
+        oldBoard <- liftIO $ readIORef boardRef
+        newBoard <- liftIO $ checkBoards oldBoard (move char oldBoard)
+        ele <- getElementsByClassName w "table"
+        UI.delete (head ele)
+        newgrid <- UI.grid (toUIBoard newBoard) 
+          # set style [("width","300px"),("height","300px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed"),("border-spacing","10px")]
+          # set (attr "tabindex") "1" -- allow key pressed
+        
+        liftIO $ writeIORef grid newgrid
+        liftIO $ writeIORef boardRef newBoard
+        getBody w #+ [liftIO (readIORef grid)]
+
+        case (haveWonOrLost board False) of 
+          Just True  -> element output # set text "You have won!! keep going if you want"
+          Just False -> element output # set text "You have lost!! :("
+          Nothing    -> element output # set text "Make a move"
+        
+        return ()
 
     -- w : 87, a : 65, s : 83, d : 68   
     -- up : 38, down : 40, left : 37, right : 39
 
+
+checkBoards :: Board -> Board -> IO Board 
+checkBoards old temp = do
+                g <- randomIO :: IO Int
+                if old == temp
+                  then return temp
+                else return (placeNewTile temp (mkStdGen g))
 
 
 ------------------------------------------------------------------------------}
@@ -126,6 +192,7 @@ tileToUIElement tile = do
                 #+ [element out]
 
 -------------------------------------------------------------------------------------
+
 
 play :: Board -> Bool -> IO()
 play board continue = case (haveWonOrLost board continue) of
@@ -226,10 +293,10 @@ placeNewTile board g = placeTile board pos randTile
 
 -- Functions for moving the board, standard is moving to the left
 move :: Char -> Board -> Board
-move char board | char == 'w' = moveUp board
-                | char == 'a' = moveLeft board
-                | char == 'd' = moveRight board
-                | char == 's' = moveDown board
+move char board | char == 'W' = moveUp board
+                | char == 'A' = moveLeft board
+                | char == 'D' = moveRight board
+                | char == 'S' = moveDown board
                 | otherwise   = board
 
 -- Moves tiles right
