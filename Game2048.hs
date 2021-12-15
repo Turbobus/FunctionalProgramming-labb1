@@ -10,6 +10,7 @@ import Graphics.UI.Threepenny.Core as UI
 import qualified Graphics.UI.Threepenny as UI
 import Graphics.UI.Threepenny.Events
 import Graphics.UI.Threepenny (rows)
+import Text.Read
 
 -- Representation of 2048 boards 
 type Tile = Maybe Int
@@ -78,19 +79,22 @@ setup w = do
 
     -- All different elements
     output <- UI.h2 #. "out"
-        # set text "What board size do you want? n >= 2 (nxn) n= "
+        # set text "What board size do you want?(nxn) n ="
         # set style [("text-align", "center")]
     down <- UI.button # set text "<"
+       # set style [("background-color", "#008CBA"),("color", "white"),("font-size","16px"),("border-radius","10px")]
 
     size <- UI.p #. "size"
         # set text "4"
-        
+        # set style [("font-size","16px")]
+
     up <- UI.button # set text ">"
+        # set style [("background-color", "#008CBA"),("color", "white"),("font-size","16px"),("border-radius","10px")]
     
     confirm <- UI.button # set text "Confirm"
- 
+        # set style [("background-color", "#008CBA"),("color", "white"),("font-size","16px"),("border-radius","10px")]
     holder <- UI.div #. "holder"
-        # set style [("display","flex"), ("justify-content","center"),("gap","10px"), ("padding-bottom","10px")]
+        # set style [("display","flex"), ("justify-content","center"),("gap","10px"), ("padding-bottom","10px"),("height","40px"),("align-items","baseline")]
     element holder #+ [ element down,
                         element size,
                         element up,
@@ -107,7 +111,7 @@ setup w = do
 
     -- Turn our start board into an UI grid
     startGrid <- UI.grid (toUIGrid board)
-        # set style [("width","400px"),("height","400px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed"),("border-spacing","10px")]
+        # set style [("width","400px"),("height","400px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed"),("border-spacing","10px"),("background","#bbada0"),("border-radius","10px")]
         # set (attr "tabindex") "1" -- allow key pressed
 
     -- Add all our elements to the body so we see them on the webpage
@@ -115,7 +119,8 @@ setup w = do
                   element holder,
                   element startGrid]
     body <- getBody w
-
+       # set style [("background", "#faf8ef")]
+   
     -- When changing board size down
     on UI.click down $ \event -> do
       curSize <- liftIO $ readIORef sizeRef
@@ -142,7 +147,7 @@ setup w = do
             ele <- getElementsByClassName w "table"
             UI.delete (head ele)
             newGrid <- UI.grid (toUIGrid board)
-                # set style [("width","400px"),("height","400px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed"),("border-spacing","10px")]
+                # set style [("width","400px"),("height","400px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed"),("border-spacing","10px"),("background","#bbada0"),("border-radius","10px")]
                 # set (attr "tabindex") "1" -- allow key pressed
           
             liftIO $ writeIORef boardRef board
@@ -156,7 +161,7 @@ setup w = do
         ele <- getElementsByClassName w "table"
         UI.delete (head ele)
         newGrid <- UI.grid (toUIGrid newBoard)
-          # set style [("width","400px"),("height","400px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed"),("border-spacing","10px")]
+          # set style [("width","400px"),("height","400px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed"),("border-spacing","10px"),("background","#bbada0"),("border-radius","10px")]
           # set (attr "tabindex") "1" -- allow key pressed
        
         liftIO $ writeIORef boardRef newBoard
@@ -193,10 +198,21 @@ toUIGrid (Board rows) = (map . map) tileToUIElement rows
 -- Converts a tile to a usable UI Element
 tileToUIElement :: Tile -> UI Element
 tileToUIElement tile = do
-            out  <- UI.div # set text (tileToString tile)
+            let strTile = tileToString tile
+            let value = readMaybe strTile :: Maybe Int
+            let colour = valueToColour value
+            out  <- UI.div # set text strTile
             UI.div #. "elem"
-                # set style [("display", "flex"),("justify-content","center"),("align-items", "center"), ("width","100%"),("height","100%"),("border","solid black 1px"), ("background","#eee"),("border-radius","10px")]
+                # set style [("display", "flex"),("justify-content","center"),("align-items", "center"), ("width","100%"),("height","100%"),("border","solid black 1px"), ("background",colour),("border-radius","10px")]
                 #+ [element out]
+
+valueToColour :: Maybe Int -> String
+valueToColour Nothing = "#cdc1b4"
+valueToColour (Just n)  = colourList !! (index 0 `mod` length colourList)
+    where colourList = ["#eee4da","#eee1c9","#f3b27a","#f69664","#f77c5f","#f75f3b","#edd073","#edcc62"]
+          index c | 2^c == n  = c-1
+                  | otherwise = index (c+1) 
+
 
 -------------------------------------------------------------------------------------
 -- Terminal Section
