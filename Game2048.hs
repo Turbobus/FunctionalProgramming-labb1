@@ -165,7 +165,7 @@ setup w = do
         liftIO $ writeIORef boardRef newBoard
         getBody w #+ [element newGrid]
 
-        case haveWonOrLost board False of
+        case haveWonOrLost newBoard False of
           Just True  -> element output # set text "You have won!! keep going if you want"
           Just False -> element output # set text "You have lost!! :("
           Nothing    -> element output # set text "Make a move"
@@ -274,7 +274,7 @@ setupNewBoard n g = placeNewTile firstPlacement f
 
 -- Check if player has won
 won :: Board -> Bool
-won (Board rows) | maximum (concat rows) >= Just 2048 = True
+won (Board rows) | maximum (concat rows) == Just 2048 = True
                  | otherwise                          = False
 
 -- Check if player has lost
