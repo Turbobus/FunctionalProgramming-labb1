@@ -66,9 +66,6 @@ exampleLost =
 -----------------------------------------------------------------------------
 -- UI Sections
 
--- TODO Lost GUI not working (Look win also)
-
-
 -- Uses GUI
 main :: IO()
 main = do
