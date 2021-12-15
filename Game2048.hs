@@ -66,6 +66,9 @@ exampleLost =
 -----------------------------------------------------------------------------
 -- UI Sections
 
+-- TODO Lost GUI not working (Look win also)
+
+
 -- Uses GUI
 main :: IO()
 main = do
@@ -77,19 +80,25 @@ setup w = do
     return w # set title "2048"
 
     -- All different elements
-    output <- UI.h3 #. "out"
+    output <- UI.h2 #. "out"
         # set text "What board size do you want? n >= 2 (nxn) n= "
-        # set style [("margin","auto")]
-
+        # set style [("text-align", "center")]
     down <- UI.button # set text "<"
-        # set style [("margin","auto")]
+
     size <- UI.p #. "size"
-        # set style [("margin","auto")]
         # set text "4"
+        
     up <- UI.button # set text ">"
-        # set style [("margin","auto")]
+    
     confirm <- UI.button # set text "Confirm"
-        # set style [("margin","auto")]
+ 
+    holder <- UI.div #. "holder"
+        # set style [("display","flex"), ("justify-content","center"),("gap","10px"), ("padding-bottom","10px")]
+    element holder #+ [ element down,
+                        element size,
+                        element up,
+                        element confirm]
+
 
     -- Create start board with an IORef
     g <- liftIO (randomIO :: IO Int)
@@ -101,15 +110,12 @@ setup w = do
 
     -- Turn our start board into an UI grid
     startGrid <- UI.grid (toUIGrid board)
-        # set style [("width","300px"),("height","300px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed"),("border-spacing","10px")]
+        # set style [("width","400px"),("height","400px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed"),("border-spacing","10px")]
         # set (attr "tabindex") "1" -- allow key pressed
 
     -- Add all our elements to the body so we see them on the webpage
     getBody w #+ [element output,
-                  element down,
-                  element size,
-                  element up,
-                  element confirm,
+                  element holder,
                   element startGrid]
     body <- getBody w
 
@@ -139,7 +145,7 @@ setup w = do
             ele <- getElementsByClassName w "table"
             UI.delete (head ele)
             newGrid <- UI.grid (toUIGrid board)
-                # set style [("width","300px"),("height","300px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed"),("border-spacing","10px")]
+                # set style [("width","400px"),("height","400px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed"),("border-spacing","10px")]
                 # set (attr "tabindex") "1" -- allow key pressed
           
             liftIO $ writeIORef boardRef board
@@ -153,7 +159,7 @@ setup w = do
         ele <- getElementsByClassName w "table"
         UI.delete (head ele)
         newGrid <- UI.grid (toUIGrid newBoard)
-          # set style [("width","300px"),("height","300px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed"),("border-spacing","10px")]
+          # set style [("width","400px"),("height","400px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed"),("border-spacing","10px")]
           # set (attr "tabindex") "1" -- allow key pressed
        
         liftIO $ writeIORef boardRef newBoard
