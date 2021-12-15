@@ -18,22 +18,14 @@ type Row  = [Tile]
 
 -- Represents a Board
 newtype Board = Board [Row]
- deriving ( Show, Eq )
+  deriving ( Show, Eq )
 
 
 -- A position inside the board
 type Pos = (Int,Int)
 
 
--- TODO
--- Make it so you can play after 2048, 👌
--- Ask for help with property, in progress 👌
--- GUI?
--- Ask in main for board size, fix crash cases 👌
--- Score??
--- Look over functions 
--- hlint
-
+-- ExampleBoards
 exampleWon :: Board
 exampleWon =
     Board
@@ -71,19 +63,140 @@ exampleLost =
     j = Just
 
 
--- Setups a new board when game is started
-setupNewBoard :: Int -> StdGen -> Board
-setupNewBoard n g = placeNewTile firstPlacement f
-    where firstPlacement = placeTile emptyBoard pos1 tile1
-          emptyBoard     = Board (replicate n (replicate n Nothing))
-          (tile1, g')    = getRandomTile g
-          (pos1, f)      = getRandomFromList (blanks emptyBoard) g'
-
+-----------------------------------------------------------------------------
+-- UI Sections
 
 -- Uses GUI
 main :: IO()
 main = do
     startGUI defaultConfig setup
+
+-- Setup for GUI
+setup :: Window -> UI ()
+setup w = do
+    return w # set title "2048"
+
+    -- All different elements
+    output <- UI.h3 #. "out"
+        # set text "What board size do you want? n >= 2 (nxn) n= "
+        # set style [("margin","auto")]
+
+    down <- UI.button # set text "<"
+        # set style [("margin","auto")]
+    size <- UI.p #. "size"
+        # set style [("margin","auto")]
+        # set text "4"
+    up <- UI.button # set text ">"
+        # set style [("margin","auto")]
+    confirm <- UI.button # set text "Confirm"
+        # set style [("margin","auto")]
+
+    -- Create start board with an IORef
+    g <- liftIO (randomIO :: IO Int)
+    let board = setupNewBoard 4 (mkStdGen g)
+    boardRef <- liftIO $ newIORef board
+
+    -- IORef for size input
+    sizeRef <- liftIO (newIORef 4 :: IO (IORef Int))
+
+    -- Turn our start board into an UI grid
+    startGrid <- UI.grid (toUIGrid board)
+        # set style [("width","300px"),("height","300px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed"),("border-spacing","10px")]
+        # set (attr "tabindex") "1" -- allow key pressed
+
+    -- Add all our elements to the body so we see them on the webpage
+    getBody w #+ [element output,
+                  element down,
+                  element size,
+                  element up,
+                  element confirm,
+                  element startGrid]
+    body <- getBody w
+
+    -- When changing board size down
+    on UI.click down $ \event -> do
+      curSize <- liftIO $ readIORef sizeRef
+      if curSize > 2
+        then liftIO $ writeIORef sizeRef (curSize - 1)
+      else return ()
+      newSize <- liftIO $ readIORef sizeRef
+      element size # set text (show newSize)
+    
+    -- When changing board size up
+    on UI.click up $ \event -> do
+      curSize <- liftIO $ readIORef sizeRef
+      if curSize < 9
+        then liftIO $ writeIORef sizeRef (curSize + 1)
+      else return ()
+      newSize <- liftIO $ readIORef sizeRef
+      element size # set text (show newSize)
+
+    -- Confirming the new size
+    on UI.click confirm $ \event -> do
+            c <- liftIO $ readIORef sizeRef
+            g <- liftIO (randomIO :: IO Int)
+            let board = setupNewBoard c (mkStdGen g)
+            ele <- getElementsByClassName w "table"
+            UI.delete (head ele)
+            newGrid <- UI.grid (toUIGrid board)
+                # set style [("width","300px"),("height","300px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed"),("border-spacing","10px")]
+                # set (attr "tabindex") "1" -- allow key pressed
+          
+            liftIO $ writeIORef boardRef board
+            getBody w #+ [element newGrid]
+
+    -- Handles a move when playing with a board
+    on UI.keydown body $ \c -> do
+        let char = keyCodeConverter c
+        oldBoard <- liftIO $ readIORef boardRef
+        newBoard <- liftIO $ checkBoards oldBoard (move char oldBoard)
+        ele <- getElementsByClassName w "table"
+        UI.delete (head ele)
+        newGrid <- UI.grid (toUIGrid newBoard)
+          # set style [("width","300px"),("height","300px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed"),("border-spacing","10px")]
+          # set (attr "tabindex") "1" -- allow key pressed
+       
+        liftIO $ writeIORef boardRef newBoard
+        getBody w #+ [element newGrid]
+
+        case haveWonOrLost board False of
+          Just True  -> element output # set text "You have won!! keep going if you want"
+          Just False -> element output # set text "You have lost!! :("
+          Nothing    -> element output # set text "Make a move"
+
+        return ()
+
+-- Converts from KeyCode to an char used for move
+-- Handles both w a s d and arrow keys
+keyCodeConverter :: KeyCode -> Char
+keyCodeConverter code | code == 87 || code == 38 = 'w'
+                      | code == 65 || code == 37 = 'a'
+                      | code == 83 || code == 40 = 's'
+                      | code == 68 || code == 39 = 'd'
+                      | otherwise = 'g'
+
+-- Check if boards are equal, otherwise place a new tile
+checkBoards :: Board -> Board -> IO Board
+checkBoards old temp = do
+                g <- randomIO :: IO Int
+                if old == temp
+                  then return temp
+                else return (placeNewTile temp (mkStdGen g))
+
+-- Convert a Board to a UI grid
+toUIGrid :: Board -> [[UI Element]]
+toUIGrid (Board rows) = (map . map) tileToUIElement rows
+
+-- Converts a tile to a usable UI Element
+tileToUIElement :: Tile -> UI Element
+tileToUIElement tile = do
+            out  <- UI.div # set text (tileToString tile)
+            UI.div #. "elem"
+                # set style [("display", "flex"),("justify-content","center"),("align-items", "center"), ("width","100%"),("height","100%"),("border","solid black 1px"), ("background","#eee"),("border-radius","10px")]
+                #+ [element out]
+
+-------------------------------------------------------------------------------------
+-- Terminal Section
 
 -- Uses terminal
 main' :: IO()
@@ -95,111 +208,13 @@ main' = do
     let board = setupNewBoard n (mkStdGen g)
     play board False
 
-setup :: Window -> UI ()
-setup w = do
-    return w # set title "2048"
-    output <- UI.h3 #. "out"
-        # set text "What board size do you want? n >= 2 (nxn) n= "
-        # set style [("text-aling","center")]
-    input <- UI.input #. "in"
-        # set style [("text-aling","center")]
-        # set UI.maxlength 1
-    button <- UI.button # set text "Confirm"
-        # set style [("text-aling","center")]
-    --board <- liftIO $ newIORef (toUIBoard exampleWon)
-    --testgrid <- UI.grid (liftIO $ readIORef board) --[[]]
-    
-    let board = setupNewBoard 4 (mkStdGen 45345) 
-    boardRef <- liftIO $ newIORef board
-    --board2 <- liftIO $ readIORef boardRef
-
-    testgrid <- UI.grid (toUIBoard board) --[[]]
-        # set style [("width","300px"),("height","300px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed"),("border-spacing","10px")]
-        # set (attr "tabindex") "1" -- allow key pressed
-    grid <- liftIO $ newIORef testgrid
-
-    getBody w #+ [element output,
-                  element input,
-                  element button,
-                  element testgrid] -- #+ [element output] #+ [element input]
-    body <- getBody w
-
-    on UI.click button $ \event -> do
-            UI.delete testgrid
-            c <- get value input
-            let n = digitToInt (head c)
-            g <- liftIO (randomIO :: IO Int)
-            let board = setupNewBoard n (mkStdGen g)
-            ele <- getElementsByClassName w "table"
-            UI.delete (head ele)
-            newgrid <- UI.grid (toUIBoard board)
-                # set style [("width","300px"),("height","300px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed"),("border-spacing","10px")]
-                # set (attr "tabindex") "1" -- allow key pressed
-            liftIO $ writeIORef grid newgrid
-            liftIO $ writeIORef boardRef board
-            getBody w #+ [liftIO (readIORef grid)]
-            
-            UI.delete input
-            UI.delete button
-
-    on UI.keydown body $ \c -> do
-        UI.delete input
-        UI.delete button
-        let char = toEnum c :: Char
-        --liftIO $ print char
-        oldBoard <- liftIO $ readIORef boardRef
-        newBoard <- liftIO $ checkBoards oldBoard (move char oldBoard)
-        ele <- getElementsByClassName w "table"
-        UI.delete (head ele)
-        newgrid <- UI.grid (toUIBoard newBoard) 
-          # set style [("width","300px"),("height","300px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed"),("border-spacing","10px")]
-          # set (attr "tabindex") "1" -- allow key pressed
-        
-        liftIO $ writeIORef grid newgrid
-        liftIO $ writeIORef boardRef newBoard
-        getBody w #+ [liftIO (readIORef grid)]
-
-        case (haveWonOrLost board False) of 
-          Just True  -> element output # set text "You have won!! keep going if you want"
-          Just False -> element output # set text "You have lost!! :("
-          Nothing    -> element output # set text "Make a move"
-        
-        return ()
-
-    -- w : 87, a : 65, s : 83, d : 68   
-    -- up : 38, down : 40, left : 37, right : 39
-
-
-checkBoards :: Board -> Board -> IO Board 
-checkBoards old temp = do
-                g <- randomIO :: IO Int
-                if old == temp
-                  then return temp
-                else return (placeNewTile temp (mkStdGen g))
-
-
-------------------------------------------------------------------------------}
-
-toUIBoard :: Board -> [[UI Element]]
-toUIBoard (Board rows) = (map . map) tileToUIElement rows
-
-
-tileToUIElement :: Tile -> UI Element
-tileToUIElement tile = do
-            out  <- UI.div # set text (tileToString tile)
-            UI.div #. "elem"
-                # set style [("display", "flex"),("justify-content","center"),("align-items", "center"), ("width","100%"),("height","100%"),("border","solid black 1px"), ("background","#eee"),("border-radius","10px")]
-                #+ [element out]
-
--------------------------------------------------------------------------------------
-
-
+-- Loop function for the game
 play :: Board -> Bool -> IO()
-play board continue = case (haveWonOrLost board continue) of
+play board continue = case haveWonOrLost board continue of
     Just True  -> do
                     printHelper board "\nYou have won!\n\nDo you want to continue? y/n?"
                     input <- getChar
-                    if(input == 'y')
+                    if input == 'y'
                       then play board True
                     else putStr "\nGoodbye!\n"
     Just False -> printHelper board "\nYou lost!! :(\n"
@@ -212,30 +227,68 @@ play board continue = case (haveWonOrLost board continue) of
         then play newBoard continue
       else play (placeNewTile newBoard (mkStdGen g)) continue
 
+-- Helps print things to the terminal
 printHelper :: Board -> String -> IO()
 printHelper b s = do
     putStr "\n"
     printBoard b
     putStr s
 
+-- Prints out the board
+-- Earlier work taken from lab 3
+printBoard :: Board -> IO ()
+printBoard (Board [])   = putStrLn ""
+printBoard (Board rows) = putStrLn (buildRows rows)
+
+-- Convert each row into a string
+-- Earlier work taken from lab 3
+buildRows :: [Row] -> String
+buildRows []         = ""
+buildRows (row:rows) = rowString ++ "\n" ++ buildRows rows
+     where rowString = unwords [tileToString tiles | tiles <- row]
+
+-- Converts the tile to a String representing that value
+-- Earlier work taken from lab 3
+tileToString :: Tile -> String
+tileToString Nothing   = "."
+tileToString (Just a)  = show a
+
+
+-----------------------------------------------------------------------------
+-- Common functions for UI and terminal section
+
+-- Setups a new board when game is started
+setupNewBoard :: Int -> StdGen -> Board
+setupNewBoard n g = placeNewTile firstPlacement f
+    where firstPlacement = placeTile emptyBoard pos1 tile1
+          emptyBoard     = Board (replicate n (replicate n Nothing))
+          (tile1, g')    = getRandomTile g
+          (pos1, f)      = getRandomFromList (blanks emptyBoard) g'
+
+
+-- Check if player has won
 won :: Board -> Bool
 won (Board rows) | maximum (concat rows) >= Just 2048 = True
                  | otherwise                          = False
 
+-- Check if player has lost
 lost :: Board -> Bool
-lost (Board rows) | Nothing `elem` (concat rows) = False
+lost (Board rows) | Nothing `elem` concat rows = False
                   | otherwise                    = moveAvailable
       where moveAvailable = available (transpose rows) && available rows
-            available r   = True `notElem` (map canMakeMove r)
+            available r   = True `notElem` map canMakeMove r
 
+-- Check if a row has an available move
+-- Helper function for lost
 canMakeMove :: Row -> Bool
 canMakeMove row = maxLength > 1
       where maxLength = maximum (map length (group row))
 
+-- Checks if the game is won or lost 
 haveWonOrLost :: Board -> Bool -> Maybe Bool
-haveWonOrLost board con | won board && con == False = Just True
-                        | lost board                = Just False
-                        | otherwise                 = Nothing
+haveWonOrLost board con | won board && not con = Just True
+                        | lost board           = Just False
+                        | otherwise            = Nothing
 
 
 -- Get a random new tile
@@ -248,11 +301,13 @@ getRandomFromList list g = (list !! i, g')
     where (i, g') = randomR (0, length list - 1) g
 
 -- Place a given tile on the given position in the board
+-- Earlier work taken from lab 3
 placeTile :: Board -> Pos -> Tile -> Board
 placeTile (Board rows) (y,x) tile = Board (rows !!= (y, newRow))
    where newRow = (rows !! y) !!= (x, tile)
 
 -- Replaces the element at given index with given value
+-- Earlier work taken from lab 3
 (!!=) :: [a] -> (Int, a) -> [a]
 xs !!= (i,y) = replaceNth (i,y) xs
   where replaceNth  _  [] = []
@@ -260,23 +315,9 @@ xs !!= (i,y) = replaceNth (i,y) xs
           | i == 0    = y:xs
           | otherwise = x:replaceNth (i-1, y) xs
 
--- Prints out the board
-printBoard :: Board -> IO ()
-printBoard (Board [])   = putStrLn ""
-printBoard (Board rows) = putStrLn (buildRows rows)
-
--- Convert each row into a string
-buildRows :: [Row] -> String
-buildRows []         = ""
-buildRows (row:rows) = rowString ++ "\n" ++ buildRows rows
-     where rowString = unwords [tileToString tiles | tiles <- row]
-
--- Converts the tile to a String representing that value
-tileToString :: Tile -> String
-tileToString Nothing   = "."
-tileToString (Just a)  = show a
 
 -- Get all the positions of blanks in a board
+-- Earlier work taken from lab 3
 blanks :: Board -> [Pos]
 blanks (Board rows) = getPositions (elemIndices Nothing (concat rows))
   where getPositions = map getElement
@@ -293,10 +334,10 @@ placeNewTile board g = placeTile board pos randTile
 
 -- Functions for moving the board, standard is moving to the left
 move :: Char -> Board -> Board
-move char board | char == 'W' = moveUp board
-                | char == 'A' = moveLeft board
-                | char == 'D' = moveRight board
-                | char == 'S' = moveDown board
+move char board | char == 'w' = moveUp board
+                | char == 'a' = moveLeft board
+                | char == 'd' = moveRight board
+                | char == 's' = moveDown board
                 | otherwise   = board
 
 -- Moves tiles right
@@ -323,7 +364,7 @@ shiftRightAndMerge = reverse . shiftLeftAndMerge . reverse
 
 -- Moves all the tiles to the left and merge the ones that can be merged
 shiftLeftAndMerge :: Row -> Row
-shiftLeftAndMerge tiles = addMergedTiles (listOfJust ++ (replicate numOfNothings Nothing))
+shiftLeftAndMerge tiles = addMergedTiles (listOfJust ++ replicate numOfNothings Nothing)
         where numOfNothings = length tiles - length listOfJust
               listOfJust    = filter isJust tiles
 
@@ -343,16 +384,16 @@ addTogheter (Nothing, Just n)      = (Just n, Nothing)
 addTogheter rest                   = rest
 
 
--- TODO: quickCheck
--- Check canMakeMove
 
+-----------------------------------------------------------------------------
+-- Testing section
 
 -- Generator for non empty boards
 instance Arbitrary Board where
   arbitrary = do
     rows <- vectorOf 4 (vectorOf 4 tile)
     i <- arbitrary
-    if (prop_2048 (Board rows))
+    if prop_2048 (Board rows)
       then return (Board rows)
     else
       return (setupNewBoard 4 (mkStdGen i))
@@ -371,28 +412,28 @@ prop_2048 (Board rows) = length (filter isNothing (concat rows)) /= 0 && all val
 
 -- Property for testing if a new tile is placed
 prop_placeNewTile :: Board -> Int -> Property
-prop_placeNewTile (Board rows) i = Nothing `elem` (concat rows) ==> (placeNewTile (Board rows) (mkStdGen i)) /= (Board rows)
+prop_placeNewTile (Board rows) i = Nothing `elem` concat rows ==> placeNewTile (Board rows) (mkStdGen i) /= Board rows
 
 
 -- Property for testing if board is a winning board
 prop_won :: Board -> Bool
-prop_won (Board rows) | won (Board rows) = Just 2048 `elem` (concat rows)
-                      | otherwise        = Just 2048 `notElem` (concat rows)
+prop_won (Board rows) | won (Board rows) = Just 2048 `elem` concat rows
+                      | otherwise        = Just 2048 `notElem` concat rows
 
 -- Property for testing if board is a losing board, TODO: something more?
 prop_lost :: Board -> Bool
-prop_lost (Board rows) | lost (Board rows) = Nothing `notElem` (concat rows)
-                       | otherwise         = Nothing `elem` (concat rows) || any canMakeMove rows || any canMakeMove (transpose rows)
+prop_lost (Board rows) | lost (Board rows) = Nothing `notElem` concat rows
+                       | otherwise         = Nothing `elem` concat rows || any canMakeMove rows || any canMakeMove (transpose rows)
 
 
 -- Property for testig if we made a move
 prop_move :: Board -> Int -> Bool
-prop_move board i  | c == 'w' = False `notElem` (map testRow (map reverse (transpose rows)))
-                   | c == 's' = False `notElem` (map testRow (transpose rows))
-                   | c == 'a' = False `notElem` (map testRow (map reverse rows))
-                   | c == 'd' = False `notElem` (map testRow rows)
+prop_move board i  | c == 'w' = all (testRow . reverse) (transpose rows)
+                   | c == 's' = all testRow (transpose rows)
+                   | c == 'a' = all (testRow . reverse) rows
+                   | c == 'd' = all testRow rows
       where (Board rows) = move c board
             c = fst (getRandomFromList ['w','a','s','d'] (mkStdGen i))
-            testRow row = length (takeWhile (isNothing) row) == length (filter isNothing row)
+            testRow row = length (takeWhile isNothing row) == length (filter isNothing row)
 
 
