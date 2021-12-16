@@ -1,7 +1,6 @@
-
 import Test.QuickCheck
 import Data.List
-import Data.Maybe (isJust, isNothing)
+import Data.Maybe (isJust, isNothing, fromJust)
 import Data.Char
 import System.Random
 import Data.IORef
@@ -11,6 +10,7 @@ import qualified Graphics.UI.Threepenny as UI
 import Graphics.UI.Threepenny.Events
 import Graphics.UI.Threepenny (rows)
 import Text.Read
+
 
 -- Representation of 2048 boards 
 type Tile = Maybe Int
@@ -26,7 +26,7 @@ newtype Board = Board [Row]
 type Pos = (Int,Int)
 
 
--- ExampleBoards
+-- Examples for boards
 exampleWon :: Board
 exampleWon =
     Board
@@ -77,24 +77,33 @@ setup :: Window -> UI ()
 setup w = do
     return w # set title "2048"
 
+    let buttonStyle = [("background-color", "#8f7a66"),("color", "white"),
+                       ("font-size","16px"),("border-radius","10px"), 
+                       ("font-family", "sans-serif")]
+
     -- All different elements
     output <- UI.h2 #. "out"
-        # set text "What board size do you want?(nxn) n ="
-        # set style [("text-align", "center")]
+        # set text "Select board size or start playing using ➡⬆⬅⬇ or wasd"
+        # set style [("text-align", "center"), ("color","#776e65"),
+                     ("font-family","sans-serif")]
+      
     down <- UI.button # set text "<"
-       # set style [("background-color", "#008CBA"),("color", "white"),("font-size","16px"),("border-radius","10px")]
+       # set style buttonStyle
 
     size <- UI.p #. "size"
         # set text "4"
-        # set style [("font-size","16px")]
+        # set style [("font-size","16px"),("font-family","sans-serif")]
 
     up <- UI.button # set text ">"
-        # set style [("background-color", "#008CBA"),("color", "white"),("font-size","16px"),("border-radius","10px")]
+        # set style buttonStyle
     
     confirm <- UI.button # set text "Confirm"
-        # set style [("background-color", "#008CBA"),("color", "white"),("font-size","16px"),("border-radius","10px")]
+        # set style buttonStyle
     holder <- UI.div #. "holder"
-        # set style [("display","flex"), ("justify-content","center"),("gap","10px"), ("padding-bottom","10px"),("height","40px"),("align-items","baseline")]
+        # set style [("display","flex"), ("justify-content","center"),
+        ("gap","10px"), ("padding-bottom","10px"),("height","40px"),
+        ("align-items","baseline")]
+
     element holder #+ [ element down,
                         element size,
                         element up,
@@ -110,10 +119,8 @@ setup w = do
     sizeRef <- liftIO (newIORef 4 :: IO (IORef Int))
 
     -- Turn our start board into an UI grid
-    startGrid <- UI.grid (toUIGrid board)
-        # set style [("width","400px"),("height","400px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed"),("border-spacing","10px"),("background","#bbada0"),("border-radius","10px")]
-        # set (attr "tabindex") "1" -- allow key pressed
-
+    startGrid <- createUIGrid board
+    
     -- Add all our elements to the body so we see them on the webpage
     getBody w #+ [element output,
                   element holder,
@@ -122,57 +129,67 @@ setup w = do
        # set style [("background", "#faf8ef")]
    
     -- When changing board size down
-    on UI.click down $ \event -> do
-      curSize <- liftIO $ readIORef sizeRef
-      if curSize > 2
-        then liftIO $ writeIORef sizeRef (curSize - 1)
-      else return ()
-      newSize <- liftIO $ readIORef sizeRef
-      element size # set text (show newSize)
+    on UI.click down $ \event -> changeInSize (-) (> 2) size sizeRef
     
     -- When changing board size up
-    on UI.click up $ \event -> do
-      curSize <- liftIO $ readIORef sizeRef
-      if curSize < 9
-        then liftIO $ writeIORef sizeRef (curSize + 1)
-      else return ()
-      newSize <- liftIO $ readIORef sizeRef
-      element size # set text (show newSize)
-
+    on UI.click up $ \event -> changeInSize (+) (< 9) size sizeRef
+    
     -- Confirming the new size
     on UI.click confirm $ \event -> do
-            c <- liftIO $ readIORef sizeRef
-            g <- liftIO (randomIO :: IO Int)
-            let board = setupNewBoard c (mkStdGen g)
-            ele <- getElementsByClassName w "table"
-            UI.delete (head ele)
-            newGrid <- UI.grid (toUIGrid board)
-                # set style [("width","400px"),("height","400px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed"),("border-spacing","10px"),("background","#bbada0"),("border-radius","10px")]
-                # set (attr "tabindex") "1" -- allow key pressed
-          
-            liftIO $ writeIORef boardRef board
-            getBody w #+ [element newGrid]
+        element confirm # set text "Confirm"
+        element output # set text "Make a move using ➡⬆⬅⬇ or wasd"
+        c <- liftIO $ readIORef sizeRef
+        g <- liftIO (randomIO :: IO Int)
+        let board = setupNewBoard c (mkStdGen g)
+        ele <- getElementsByClassName w "table"
+        UI.delete (head ele)
+        newGrid <- createUIGrid board
+        liftIO $ writeIORef boardRef board
+        getBody w #+ [element newGrid]
 
-    -- Handles a move when playing with a board
+   -- Handles a move when playing with a board
     on UI.keydown body $ \c -> do
         let char = keyCodeConverter c
         oldBoard <- liftIO $ readIORef boardRef
         newBoard <- liftIO $ checkBoards oldBoard (move char oldBoard)
         ele <- getElementsByClassName w "table"
         UI.delete (head ele)
-        newGrid <- UI.grid (toUIGrid newBoard)
-          # set style [("width","400px"),("height","400px"),("border","solid black 2px"),("margin","auto"), ("table-layout", "fixed"),("border-spacing","10px"),("background","#bbada0"),("border-radius","10px")]
-          # set (attr "tabindex") "1" -- allow key pressed
+        newGrid <- createUIGrid newBoard
        
         liftIO $ writeIORef boardRef newBoard
         getBody w #+ [element newGrid]
 
         case haveWonOrLost newBoard False of
           Just True  -> element output # set text "You have won!! keep going if you want"
-          Just False -> element output # set text "You have lost!! :("
-          Nothing    -> element output # set text "Make a move"
-
+          Nothing    -> element output # set text "Make a move using ➡⬆⬅⬇ or wasd"         
+          Just False -> do 
+                          element output # set text "You have lost!! :("
+                          element confirm # set text "Restart!"
         return ()
+
+
+-- Create a new UI grid element with given board
+createUIGrid :: Board -> UI Element
+createUIGrid board = UI.grid (toUIGrid board)
+        # set style [("width","400px"),("height","400px"),
+                    ("border","solid #776e65 2px"),
+                    ("margin","auto"), ("table-layout", "fixed"),
+                    ("border-spacing","10px"),
+                    ("background","#bbada0"),("border-radius","10px")]
+        # set (attr "tabindex") "1" -- allow key pressed
+
+-- Changes the board size input text and updates size IORef
+changeInSize :: (Int -> Int -> Int) -> (Int -> Bool)-> Element -> 
+                 IORef Int -> UI ()
+changeInSize op comp size sizeRef = do
+      curSize <- liftIO $ readIORef sizeRef 
+      if (comp curSize)
+        then liftIO $ writeIORef sizeRef (curSize `op` 1)
+      else return ()
+      newSize <- liftIO $ readIORef sizeRef
+      element size # set text (show newSize)
+      return ()
+
 
 -- Converts from KeyCode to an char used for move
 -- Handles both w a s d and arrow keys
@@ -203,18 +220,27 @@ tileToUIElement tile = do
             let colour = valueToColour value
             out  <- UI.div # set text strTile
             UI.div #. "elem"
-                # set style [("display", "flex"),("justify-content","center"),("align-items", "center"), ("width","100%"),("height","100%"),("border","solid black 1px"), ("background",colour),("border-radius","10px")]
+                # set style [("display", "flex"),("justify-content","center"),
+                ("align-items", "center"), ("width","100%"),("height","100%"),
+                ("border","solid #776e65 1px"), ("background",colour),
+                ("border-radius","10px"),
+                ("color", "#776e65"),
+                ("font-weight", "bold"),
+                ("font-size", "20px"),
+                ("font-family", "sans-serif")]
                 #+ [element out]
 
+-- Return a colour for the given value
 valueToColour :: Maybe Int -> String
 valueToColour Nothing = "#cdc1b4"
-valueToColour (Just n)  = colourList !! (index 0 `mod` length colourList)
-    where colourList = ["#eee4da","#eee1c9","#f3b27a","#f69664","#f77c5f","#f75f3b","#edd073","#edcc62"]
-          index c | 2^c == n  = c-1
-                  | otherwise = index (c+1) 
+valueToColour (Just n)  = colourList !! (index `mod` length colourList)
+    where colourList = ["#eee4da","#eee1c9","#f3b27a","#f69664","#f77c5f",
+              "#f75f3b","#edd073","#edcc62","#edc850","#edc53f","#edc22e"]
+          index  = round (logBase 2 (fromIntegral n)) - 1
+          
 
 
--------------------------------------------------------------------------------------
+-------------------------------------------------------------------------------
 -- Terminal Section
 
 -- Uses terminal
@@ -383,14 +409,17 @@ shiftRightAndMerge = reverse . shiftLeftAndMerge . reverse
 
 -- Moves all the tiles to the left and merge the ones that can be merged
 shiftLeftAndMerge :: Row -> Row
-shiftLeftAndMerge tiles = addMergedTiles (listOfJust ++ replicate numOfNothings Nothing)
+shiftLeftAndMerge tiles = addMergedTiles (listOfJust ++ 
+                          replicate numOfNothings Nothing)
         where numOfNothings = length tiles - length listOfJust
               listOfJust    = filter isJust tiles
 
 -- Merge tiles, helper function for shiftLeftAndMerge
 addMergedTiles :: Row -> Row
-addMergedTiles (row:row2:rowRest) | isNothing nt2 = nt1 : addMergedTiles (rowRest ++ [nt2])
-                                  | otherwise     = nt1 : addMergedTiles (nt2:rowRest)
+addMergedTiles (row:row2:rowRest) | isNothing nt2 = nt1 : 
+                                    addMergedTiles (rowRest ++ [nt2])
+                                  | otherwise     = nt1 : 
+                                    addMergedTiles (nt2:rowRest)
         where (nt1, nt2) = addTogheter (row, row2)
 addMergedTiles row = row
 
@@ -423,15 +452,23 @@ tile = do
     num <- choose (1,11) :: Gen Int
     frequency [(5, return $ Just (2^num)), (5, return Nothing)]
 
--- Property for a 2048 board, it can not be empty and should be a square
+-- Property for a 2048 board, it can not be empty, should be a square and 
+-- all numbers should be of power 2
 prop_2048 :: Board -> Bool
-prop_2048 (Board rows) = length (filter isNothing (concat rows)) /= 0 && all validLength rows
-    where validLength list = length list == length rows
-
+prop_2048 (Board rows) = length listOfTiles /= 0 && all 
+                        (checkIfValidInt . fromIntegral .fromJust) listOfTiles 
+                        && all validLength rows
+    where validLength list  = length list == length rows
+          listOfTiles       = filter isJust (concat rows)
+          checkIfValidInt x = logBase 2 x == fromInteger (round (logBase 2 x))
+        
+          
+          
 
 -- Property for testing if a new tile is placed
 prop_placeNewTile :: Board -> Int -> Property
-prop_placeNewTile (Board rows) i = Nothing `elem` concat rows ==> placeNewTile (Board rows) (mkStdGen i) /= Board rows
+prop_placeNewTile (Board rows) i = Nothing `elem` concat rows ==> 
+             placeNewTile (Board rows) (mkStdGen i) /= Board rows
 
 
 -- Property for testing if board is a winning board
@@ -439,10 +476,12 @@ prop_won :: Board -> Bool
 prop_won (Board rows) | won (Board rows) = Just 2048 `elem` concat rows
                       | otherwise        = Just 2048 `notElem` concat rows
 
--- Property for testing if board is a losing board, TODO: something more?
+-- Property for testing if board is a losing board
 prop_lost :: Board -> Bool
 prop_lost (Board rows) | lost (Board rows) = Nothing `notElem` concat rows
-                       | otherwise         = Nothing `elem` concat rows || any canMakeMove rows || any canMakeMove (transpose rows)
+                       | otherwise         = Nothing `elem` concat rows ||
+                                             any canMakeMove rows || 
+                                             any canMakeMove (transpose rows)
 
 
 -- Property for testig if we made a move
@@ -453,6 +492,7 @@ prop_move board i  | c == 'w' = all (testRow . reverse) (transpose rows)
                    | c == 'd' = all testRow rows
       where (Board rows) = move c board
             c = fst (getRandomFromList ['w','a','s','d'] (mkStdGen i))
-            testRow row = length (takeWhile isNothing row) == length (filter isNothing row)
+            testRow row = length (takeWhile isNothing row) == 
+                          length (filter isNothing row)
 
 
